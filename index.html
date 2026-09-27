@@ -36,11 +36,17 @@ input,select,textarea{font:inherit;color:var(--ink)}
 .hide{display:none!important}
 
 /* A 日付の見出し */
-#hdr{display:flex;align-items:center;gap:8px;padding:12px 14px 6px}
+#hdr{display:flex;align-items:center;gap:6px;padding:12px 14px 6px}
 #hdrTitle{flex:1;font-size:19px;font-weight:bold}
 #hdrTitle small{font-size:12px;font-weight:bold;color:#fff;background:var(--acc);border-radius:10px;padding:1px 8px;margin-left:6px;vertical-align:middle}
 .hbtn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 10px;font-size:14px}
 .hbtn.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+/* 見出しを大きく（2026-09-27 ユーザー指定＝今日ボタンは押しやすい目安の高さ44px・緑の縁／日付と「選ぶ」も釣り合うように） */
+#hdrTitle{font-size:22px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#hdrTitle small{font-size:13px;padding:2px 9px}
+.hbtn{white-space:nowrap;flex:none}
+#goToday{box-sizing:border-box;padding:8px 18px;font-size:17px;font-weight:bold;min-height:44px;border-color:var(--acc);color:var(--acc)}
+#selToggle{box-sizing:border-box;padding:6px 12px;font-size:15px;min-height:40px}
 
 /* B 週の日付 */
 #strip{display:flex;align-items:center;padding:2px 4px 8px;border-bottom:1px solid var(--line);touch-action:pan-y}
@@ -723,7 +729,7 @@ function render() {
   show("goToday", V.tab !== "set" && (V.day !== td || V.tab === "cal"));
   show("selToggle", V.tab === "list");
   el("selToggle").classList.toggle("on", V.selecting);
-  el("selToggle").textContent = V.selecting ? "✕ 選ぶのをやめる" : "📤 選ぶ";
+  el("selToggle").textContent = V.selecting ? "✕ やめる" : "📤 選ぶ";   // 短く＝大きくした日付が切れないように
   show("listView", V.tab === "list");
   show("calView", V.tab === "cal");
   show("setView", V.tab === "set");
