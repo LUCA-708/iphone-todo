@@ -97,7 +97,6 @@ input,select,textarea{font:inherit;color:var(--ink)}
 .chk.done:after{content:"✓";color:#fff;position:absolute;left:5px;top:0;font-size:16px;font-weight:bold}
 .sq{flex:none;width:24px;height:24px;border:2px solid var(--acc);border-radius:6px}
 .sq.on{background:var(--acc)}
-.sq.off{border-color:#D9D6CC;background:var(--bg2)}
 .dot{flex:none;width:10px;height:10px;border-radius:50%}
 .t{flex:1;min-width:0}
 .t .ti{word-break:break-word;line-height:1.35}
@@ -120,6 +119,38 @@ input,select,textarea{font:inherit;color:var(--ink)}
 #selSend:disabled{opacity:.45}
 #selMsg{font-size:12px;color:var(--ink2);margin-top:6px;line-height:1.5}
 #selMsg.ng{color:var(--ng);font-weight:bold}
+
+/* 🗂 種類タブ（2026-09-27） */
+#catTabs{display:flex;gap:6px;padding:8px 12px;overflow-x:auto;scrollbar-width:none;border-bottom:1px solid var(--line)}
+#catTabs::-webkit-scrollbar{display:none}
+.ct{flex:none;padding:7px 12px;border-radius:18px;font-size:14px;background:var(--card);border:1px solid var(--line);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.ct i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.ct small{color:var(--muted);font-weight:bold;font-size:12px}
+.ct.on{background:var(--ink);color:#fff;border-color:var(--ink)}.ct.on small{color:#ddd}
+.ct em{width:7px;height:7px;border-radius:50%;background:var(--ng);display:inline-block}
+#catAddForm{display:flex;gap:6px;padding:8px 12px}
+#catAddText{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px}
+#catAddGo{flex:none;width:50px;border-radius:12px;background:var(--acc);color:#fff;font-size:24px}
+#catMsg{margin:0 14px 4px;font-size:13px;color:var(--ng);line-height:1.5}
+#catMsg.ok{color:var(--acc)}
+.seg{display:flex;margin:4px 12px 8px;background:var(--bg2);border-radius:10px;padding:3px}
+.seg button{flex:1;padding:7px;font-size:14px;border-radius:8px;color:var(--ink2)}
+.seg button.on{background:var(--card);font-weight:bold;box-shadow:0 1px 2px rgba(0,0,0,.08)}
+/* まとめての操作（一覧・種類タブ共通） */
+#selbar .ops{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+#selbar .ops button{border:1px solid var(--line);background:var(--card);border-radius:9px;padding:7px 9px;font-size:13px;white-space:nowrap}
+#selbar .ops button.ng{color:var(--ng);border-color:#e7b9b3}
+#selbar .ops button.armed{background:var(--ng);color:#fff;border-color:var(--ng)}
+#selbar .ops button:disabled{opacity:.45}
+#selbar .ops button#selSend{background:var(--acc);color:#fff;border-color:var(--acc);font-weight:bold;padding:7px 9px}
+.lnk{font-size:13px;color:var(--acc);text-decoration:underline;padding:4px 2px;white-space:nowrap}
+/* 選ぶ中は下の帯が高くなる＝最後の行が帯に隠れないように下を空ける */
+body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
+#picker{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;max-height:80vh;overflow-y:auto;background:var(--bg);border-radius:16px 16px 0 0;z-index:31;padding:12px 12px calc(16px + env(safe-area-inset-bottom))}
+#picker b{display:block;font-size:15px;margin:2px 4px 8px}
+#picker button.pk{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:6px;font-size:15px}
+#picker button.pk i{width:10px;height:10px;border-radius:50%;display:inline-block}
+#picker input[type=date]{width:100%;box-sizing:border-box;padding:11px;border:1px solid var(--line);border-radius:10px;font-size:16px;margin-bottom:6px;background:var(--card)}
 
 /* H 下の切り替え */
 #tabs{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:21}
@@ -187,7 +218,7 @@ input,select,textarea{font:inherit;color:var(--ink)}
 <header id="hdr">
   <div id="hdrTitle"></div>
   <button class="hbtn" id="goToday">今日</button>
-  <button class="hbtn" id="selToggle">📤 選ぶ</button>
+  <button class="hbtn" id="selToggle">☑ 選ぶ</button>
 </header>
 
 <div id="saveErr" class="bar ng hide">⚠️ 保存できませんでした。いま入れた内容は、アプリを閉じると消えます（iPhone の空き容量を確かめてください）。</div>
@@ -211,6 +242,21 @@ input,select,textarea{font:inherit;color:var(--ink)}
   <div id="groups"><div id="impBox"></div><div id="groupsStage" class="pgstage"><div id="dayGroups" class="groups"></div></div></div>
 </section>
 
+<!-- 🗂 種類タブ：日付と切り離して種類ごとに全部を見る（2026-09-27 ユーザー決定 A）。
+     めくりは #catBody で受ける（種類のタブの横スクロールとぶつからないように、タブの行は外す） -->
+<section id="catView" class="hide">
+  <div id="catTabs"></div>
+  <form id="catAddForm" autocomplete="off">
+    <input id="catAddText" type="text" enterkeyhint="done" maxlength="200">
+    <button type="submit" id="catAddGo" aria-label="入れる">＋</button>
+  </form>
+  <div id="catMsg"></div>
+  <div id="catBody">
+    <div id="catSeg" class="seg"></div>
+    <div id="catStage" class="pgstage"><div id="catList" class="groups"></div></div>
+  </div>
+</section>
+
 <section id="calView" class="hide">
   <div id="calHead"><button id="calPrev">‹</button><span id="calTitle"></span><button id="calNext">›</button></div>
   <div id="calStage" class="pgstage"><div id="calGrid" class="calgrid"></div></div>
@@ -220,18 +266,25 @@ input,select,textarea{font:inherit;color:var(--ink)}
 <section id="setView" class="hide"></section>
 
 <div id="selbar" class="hide">
-  <div class="r"><span id="selCount"></span><button id="selSend">📤 Task Desk へ送る</button><button class="btn" id="selCancel">やめる</button></div>
-  <div id="selMsg">※ 送るのは題名・期限・種類・重要まで。繰り返し・小項目・メモは送られません。送信済（灰色）は選べません。</div>
+  <div class="r"><span id="selCount"></span><button class="lnk" id="selAll">全部選ぶ</button><button class="lnk" id="selNone">外す</button></div>
+  <div class="ops">
+    <button data-op="done">✔ 完了</button><button data-op="undone">↩ 未完了に戻す</button><button data-op="due">📅 期限</button>
+    <button data-op="cat">🏷 種類</button><button data-op="imp">⭐ 重要</button><button data-op="send" id="selSend">📤 Task Desk へ</button>
+    <button data-op="del" class="ng">🗑 消す</button>
+  </div>
+  <div id="selMsg"></div>
 </div>
 
 <nav id="tabs">
   <button data-tab="list" class="on"><b>☑</b>一覧</button>
+  <button data-tab="cat"><b>🗂</b>種類</button>
   <button data-tab="cal"><b>📅</b>カレンダー</button>
   <button data-tab="set"><b>⚙</b>設定</button>
 </nav>
 
 <div id="sheetBack" class="hide"></div>
 <div id="sheet" class="hide"></div>
+<div id="picker" class="hide"></div>
 <div id="toast" class="hide"><span id="toastText"></span><button id="toastUndo">↩ 元に戻す</button></div>
 <input type="file" id="importFile" accept=".json,application/json" class="hide">
 
@@ -523,6 +576,104 @@ function removeDoneOn(tasks, day, today, cat) {
   groupTasks(tasks, day, today, cat).done.forEach(function (t) { gone[t.id] = true; });
   return tasks.filter(function (t) { return !gone[t.id]; });
 }
+// ── 🗂 種類タブ・まとめての操作（2026-09-27）────────────────
+/** 種類で絞る。cat＝""（すべて）／"none"（未分類）／種類の id */
+function inCat(t, cat) { return cat === "" ? true : cat === "none" ? t.cat === "" : t.cat === cat; }
+/** ⭐重要を上に、そのあとは期限の近い順（期限が同じなら手で並べた順） */
+function byImpThenDue(a, b) { if (!!a.imp !== !!b.imp) return a.imp ? -1 : 1; return byDueThenOrder(a, b); }
+/** 種類タブの中身。mode＝"open"（未完了）／"done"（完了）／"all"（すべて）。
+ *  未完了＝期限切れ → 日付あり（近い順）→ 期限なし（どれも⭐重要が上）／完了＝完了した日の新しい順 */
+function catView(tasks, cat, mode, today) {
+  var v = { overdue: [], dated: [], undated: [], done: [] };
+  tasks.forEach(function (t) {
+    if (!inCat(t, cat)) return;
+    if (t.done) { if (mode !== "open") v.done.push(t); return; }
+    if (mode === "done") return;
+    if (!t.due) v.undated.push(t);
+    else if (t.due < today) v.overdue.push(t);
+    else v.dated.push(t);
+  });
+  v.overdue.sort(byImpThenDue); v.dated.sort(byImpThenDue); v.undated.sort(byImpThenDue);
+  v.done.sort(function (a, b) { return a.doneAt < b.doneAt ? 1 : a.doneAt > b.doneAt ? -1 : 0; });
+  return v;
+}
+/** 種類ごとの件数 { "": 全部, "none": 未分類, 種類id: … } ＝ { open 未完了, late 期限切れ, any 完了も含む全部 } */
+function catCounts(tasks, cats, today) {
+  var c = { "": { open: 0, late: 0, any: 0 }, none: { open: 0, late: 0, any: 0 } };
+  cats.forEach(function (k) { c[k.id] = { open: 0, late: 0, any: 0 }; });
+  tasks.forEach(function (t) {
+    // 🔴 絞り込み（inCat）と同じ数え方＝未分類は種類が空のものだけ。知らない種類の番号は「すべて」にだけ数える
+    //    （食い違うと「未分類 1件」と出るのに開くと0件になる）
+    var keys = [""];
+    if (t.cat === "") keys.push("none"); else if (c[t.cat]) keys.push(t.cat);
+    keys.forEach(function (k) {
+      c[k].any += 1;
+      if (!t.done) { c[k].open += 1; if (t.due && t.due < today) c[k].late += 1; }
+    });
+  });
+  return c;
+}
+/** 完了を取り消す（1件ずつの ↩ とまとめての「未完了に戻す」の共通部分）。
+ *  繰り返しで作った次の回は、まだ誰も触っていなければ消す（二重にしない）。残ったタスクの配列を返す */
+function uncompleteTask(tasks, t, iso) {
+  t.done = false;
+  t.doneAt = "";
+  if (t.spawned) {
+    var n = null;
+    tasks.forEach(function (x) { if (x.id === t.spawned) n = x; });
+    if (n && !n.done && n.touchedAt === n.createdAt && !n.sentAt) tasks = tasks.filter(function (x) { return x.id !== n.id; });
+    delete t.spawned;
+  }
+  t.touchedAt = iso;
+  return tasks;
+}
+/** まとめて完了。1件ずつと同じ completeTask を通す＝繰り返しは次の回を作る。{ tasks, ids 完了にした id, spawned 作った次の回の数 } */
+function completeMany(tasks, ids, now) {
+  var iso = now.toISOString(), done = [], spawned = 0, add = [];
+  tasks.forEach(function (t) {
+    if (!ids[t.id] || t.done) return;
+    var next = completeTask(t, now);
+    if (next) { add.push(next); t.spawned = next.id; spawned += 1; }
+    t.touchedAt = iso;
+    done.push(t.id);
+  });
+  return { tasks: tasks.concat(add), ids: done, spawned: spawned };
+}
+/** まとめて未完了に戻す。{ tasks, n 戻した数 } */
+function uncompleteMany(tasks, ids, iso) {
+  var n = 0, list = tasks.filter(function (t) { return ids[t.id] && t.done; });
+  list.forEach(function (t) { tasks = uncompleteTask(tasks, t, iso); n += 1; });
+  return { tasks: tasks, n: n };
+}
+/** まとめて期限を変える（""＝期限なし）。並びは変えた先の日の後ろへ。変えた数を返す */
+function setDueMany(tasks, ids, due, iso) {
+  var m = 0, n = 0;
+  tasks.forEach(function (t) { if (!t.done && !ids[t.id] && t.due === due && t.order > m) m = t.order; });
+  tasks.forEach(function (t) {
+    if (!ids[t.id]) return;
+    m += 10; t.due = due; t.order = m; t.touchedAt = iso; n += 1;
+  });
+  return n;
+}
+/** まとめて種類を変える（""＝未分類）。変えた数を返す */
+function setCatMany(tasks, ids, cat, iso) {
+  var n = 0;
+  tasks.forEach(function (t) { if (ids[t.id]) { t.cat = cat; t.touchedAt = iso; n += 1; } });
+  return n;
+}
+/** まとめて重要。選んだ物が全部重要なら外す・1つでも重要でなければ全部付ける。付けたら true */
+function toggleImpMany(tasks, ids, iso) {
+  var sel = tasks.filter(function (t) { return ids[t.id]; });
+  var on = !sel.every(function (t) { return t.imp; });
+  sel.forEach(function (t) { t.imp = on; t.touchedAt = iso; });
+  return on;
+}
+/** 選んだ物のうち Task Desk へ送れる物（未送信・未完了）と、飛ばす数 */
+function sendable(tasks, ids) {
+  var q = [], skipped = 0;
+  tasks.forEach(function (t) { if (!ids[t.id]) return; if (t.sentAt || t.done) skipped += 1; else q.push(t); });
+  return { queue: q, skipped: skipped };
+}
 function pruneDone(tasks, today) {
   return tasks.filter(function (t) {
     return !(t.done && t.doneAt && daysBetween(ymd(new Date(t.doneAt)), today) >= PRUNE_DAYS);
@@ -641,7 +792,7 @@ function backupNag(lastBackup, taskCount, today) {
 var S = { tasks: [], cats: [], prefs: {} };
 var V = { tab: "list", day: "", cat: "", selecting: false, selected: {}, impOpen: true,
           undatedOpen: false, doneOpen: false, calY: 0, calM: 0, editCat: null, sheetId: null,
-          sending: false, pinMode: false };
+          sending: false, pinMode: false, catView: "", catMode: "open" };
 
 function el(id) { return document.getElementById(id); }
 function show(id, on) { el(id).classList.toggle("hide", !on); }
@@ -683,6 +834,8 @@ function loadAll() {
   S.tasks = usable.map(function (t) { return normalizeTask(t, nowD); });
   S.cats = S.cats.filter(function (c) { return c && typeof c.id === "string" && typeof c.name === "string"; });
   S.cats.forEach(function (c) { if (typeof c.color !== "string" || !c.color) c.color = NONE_COLOR; });
+  // 無い種類の番号を持つタスクは未分類へ（控えの取り込み・古いデータで起こりうる＝どの種類タブにも出なくなるのを防ぐ）
+  fixOrphanCats();
   if (broken.length) {
     try {
       localStorage.setItem(KEYS.broken, JSON.stringify({ at: nowIso(), tasks: rt, cats: rc, prefs: rp }));
@@ -691,6 +844,8 @@ function loadAll() {
   }
   if (!S.prefs.weekStart) S.prefs.weekStart = "mon";
 }
+/** 無い種類の番号を持つタスクを未分類へ（読み込み・控えの取り込みの両方で呼ぶ） */
+function fixOrphanCats() { S.tasks.forEach(function (t) { if (t.cat && !findCat(S.cats, t.cat)) t.cat = ""; }); }
 function showBroken(text) { el("brokenBar").textContent = "⚠️ " + text; show("brokenBar", true); }
 function saveAll() {
   try {
@@ -716,35 +871,51 @@ function updateBadge() {
 // ── 2度押しの確認（消す・置き換える・まとめて動かす）──────────
 var armed = {};
 function armOr(key, btn, label, go) {
-  if (armed[key]) { clearTimeout(armed[key].t); delete armed[key]; go(); return; }
+  if (armed[key]) { disarm(key); go(); return; }
   var before = btn.textContent;
   btn.textContent = label;
   btn.classList.add("armed");
-  armed[key] = { t: setTimeout(function () {
-    delete armed[key]; btn.textContent = before; btn.classList.remove("armed");
-  }, 4000) };
+  armed[key] = { btn: btn, before: before, t: setTimeout(function () { disarm(key); }, 4000) };
+  return armed[key];
+}
+/** 1回目の押し待ちを取り消して、ボタンを元の文字に戻す */
+function disarm(key) {
+  var a = armed[key]; if (!a) return;
+  clearTimeout(a.t); delete armed[key];
+  a.btn.textContent = a.before; a.btn.classList.remove("armed");
 }
 
 // ── 全体の描き直し ──────────────────────────────
 function render() {
   var td = today();
   if (!V.day) V.day = td;
+  if (V.tab === "cat" && catKeys().indexOf(V.catView) < 0) { V.catView = ""; S.prefs.catView = ""; }
+  // 🔴 選んだまま日・種類・未完了/完了を変えたら選択を外す（見えていない物までまとめて消える・変わるのを防ぐ）
+  if (V.selecting) {
+    var vk = selViewKey();
+    if (V.selView && V.selView !== vk) V.selected = {};
+    V.selView = vk;
+  } else V.selView = "";
+  if (armed.selDel && (!V.selecting || armed.selDel.sig !== selSig())) disarm("selDel");
   var d = toDate(V.day);
   el("hdrTitle").innerHTML = V.tab === "list"
     ? esc((d.getMonth() + 1) + "月" + d.getDate() + "日（" + WEEKDAY_JP[weekdayOf(V.day)] + "）") + (V.day === td ? "<small>今日</small>" : "")
-    : V.tab === "cal" ? "カレンダー" : "設定";
+    : V.tab === "cat" ? "🗂 " + esc(catLabel(V.catView)) : V.tab === "cal" ? "カレンダー" : "設定";
   paintTodayBtn();
-  show("selToggle", V.tab === "list");
+  show("selToggle", V.tab === "list" || V.tab === "cat");
   el("selToggle").classList.toggle("on", V.selecting);
-  el("selToggle").textContent = V.selecting ? "✕ やめる" : "📤 選ぶ";   // 短く＝大きくした日付が切れないように
+  el("selToggle").textContent = V.selecting ? "✕ やめる" : "☑ 選ぶ";   // 短く＝大きくした日付が切れないように
+  document.body.classList.toggle("selecting", V.selecting);
   show("listView", V.tab === "list");
+  show("catView", V.tab === "cat");
   show("calView", V.tab === "cal");
   show("setView", V.tab === "set");
-  show("selbar", V.tab === "list" && V.selecting);
+  show("selbar", (V.tab === "list" || V.tab === "cat") && V.selecting);
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
     b.classList.toggle("on", b.getAttribute("data-tab") === V.tab);
   });
   if (V.tab === "list") renderList();
+  if (V.tab === "cat") renderCat();
   if (V.tab === "cal") renderCal();
   if (V.tab === "set") renderSettings();
 }
@@ -860,41 +1031,44 @@ function rowHtml(t, o) {
     var dn = t.subs.filter(function (s) { return s.done; }).length;
     sub.push("小項目 " + dn + "/" + t.subs.length);
   }
-  if (o.grp === "undated" && isSleepy(t, td)) sub.push("💤 " + sleepyDays(t, td) + "日さわっていない");
+  if ((o.grp === "undated" || o.sleepy) && isSleepy(t, td)) sub.push("💤 " + sleepyDays(t, td) + "日さわっていない");
   if (t.note) sub.push("📝");
 
   var left, right = "";
-  if (V.selecting && o.grp !== "done") {
-    left = '<span class="sq' + (t.sentAt ? " off" : (V.selected[t.id] ? " on" : "")) + '"></span>';
+  // 選ぶ中は完了・送信済みも選べる（戻す・消すのため。送るときだけ飛ばす＝sendable）
+  if (V.selecting) {
+    left = '<span class="sq' + (V.selected[t.id] ? " on" : "") + '"></span>';
   } else {
     left = '<button class="chk' + (t.done ? " done" : "") + '" data-act="check" aria-label="完了"></button>';
   }
   if (t.sentAt) right += '<span class="sent">送信済</span>';
-  if (!V.selecting && o.grp === "undated") {
+  if (!V.selecting && (o.grp === "undated" || o.quick)) {
     right += '<button class="mini" data-act="toToday">今日へ</button><button class="mini" data-act="toTomorrow">明日へ</button>';
   }
-  if (!V.selecting && o.grp !== "done") {
+  if (!V.selecting && !t.done) {
     right += '<button class="star' + (t.imp ? " on" : "") + '" data-act="star" aria-label="重要">' + (t.imp ? "★" : "☆") + "</button>";
   }
-  return '<div class="row' + (t.imp && o.grp !== "done" ? " imp" : "") + (t.done ? " isdone" : "")
+  return '<div class="row' + (t.imp && !t.done ? " imp" : "") + (t.done ? " isdone" : "")
     + '" data-id="' + esc(t.id) + '" data-grp="' + o.grp + '">' + left
     + '<span class="dot" style="background:' + (cat ? cat.color : NONE_COLOR) + '"></span>'
     + '<div class="t"><div class="ti">' + esc(t.title)
-    + (cat && V.cat === "" ? '<span class="tag">' + esc(cat.name) + "</span>" : "") + "</div>"
+    + (cat && (o.tag !== undefined ? o.tag : V.cat === "") ? '<span class="tag">' + esc(cat.name) + "</span>" : "") + "</div>"
     + (sub.length ? "<small>" + sub.join("・") + "</small>" : "") + "</div>" + right + "</div>";
 }
 
 // ── 入れる ───────────────────────────────────
-function addFromInput(pin) {
-  var box = el("addText");
+/** where＝"cat" なら種類タブの入力欄（今の種類が付く・期限なし）。それ以外は一覧（見ている日・絞っている種類） */
+function addFromInput(pin, where) {
+  var onCat = where === "cat";
+  var box = el(onCat ? "catAddText" : "addText");
   var r = parseInput(box.value, S.cats.map(function (c) { return c.name; }), today());
-  var msg = el("addMsg");
+  var msg = el(onCat ? "catMsg" : "addMsg");
   msg.className = "";
   if (!r.title) { msg.textContent = r.warnings.length ? r.warnings.join(" / ") : "題名を入れてください。"; return; }
-  var cat = "";
+  var cat = "", here = onCat ? V.catView : V.cat;
   if (r.catName) S.cats.forEach(function (c) { if (c.name === r.catName) cat = c.id; });
-  else if (V.cat && V.cat !== "none") cat = V.cat;       // 絞っている種類があればそこへ
-  var due = r.due !== null ? r.due : (pin ? "" : V.day);
+  else if (here && here !== "none") cat = here;       // 見ている・絞っている種類があればそこへ
+  var due = r.due !== null ? r.due : (pin || onCat ? "" : V.day);
   var t = makeTask({ title: r.title, due: due, cat: cat, imp: r.imp, order: nextOrder(due) }, new Date());
   S.tasks.push(t);
   saveAll();
@@ -904,7 +1078,7 @@ function addFromInput(pin) {
   if (r.warnings.length) msg.textContent = "⚠️ " + r.warnings.join(" / ");
   else {
     msg.className = "ok";
-    msg.textContent = "✔ 入れました" + (due !== V.day ? "（" + (due ? shortDate(due) : "📌 期限なし") + "）" : "");
+    msg.textContent = "✔ 入れました" + (onCat ? (due ? "（" + shortDate(due) + "）" : "") : due !== V.day ? "（" + (due ? shortDate(due) : "📌 期限なし") + "）" : "");
     setTimeout(function () { if (msg.className === "ok") msg.textContent = ""; }, 2500);
   }
 }
@@ -923,30 +1097,21 @@ function doComplete(t) {
   touch(t);
   saveAll();
   render();
-  showUndo("✔「" + t.title + "」を完了にしました" + (next ? "（次の回：" + shortDate(next.due) + "）" : ""), t.id);
+  showUndo("✔「" + t.title + "」を完了にしました" + (next ? "（次の回：" + shortDate(next.due) + "）" : ""), [t.id]);
 }
 function undoComplete(id) {
   var t = taskById(id);
   if (!t) return;
-  t.done = false;
-  t.doneAt = "";
-  // 繰り返しで作った次の回は、まだ誰も触っていなければ消す（二重にしない）
-  if (t.spawned) {
-    var n = taskById(t.spawned);
-    if (n && !n.done && n.touchedAt === n.createdAt && !n.sentAt) {
-      S.tasks = S.tasks.filter(function (x) { return x.id !== n.id; });
-    }
-    delete t.spawned;
-  }
-  touch(t);
+  S.tasks = uncompleteTask(S.tasks, t, nowIso());
   saveAll();
   render();
 }
-function showUndo(text, id) {
+/** 「↩ 元に戻す」の帯。ids＝戻す完了の id（まとめて完了なら複数） */
+function showUndo(text, ids) {
   if (undoState) clearTimeout(undoState.timer);
   el("toastText").textContent = text;
   show("toast", true);
-  undoState = { id: id, timer: setTimeout(function () { show("toast", false); undoState = null; }, 5000) };
+  undoState = { ids: ids, timer: setTimeout(function () { show("toast", false); undoState = null; }, 5000) };
 }
 
 // ── 一覧の押し分け ──────────────────────────────
@@ -989,7 +1154,7 @@ function onListClick(e) {
       t.due = a === "toToday" ? today() : addDays(today(), 1);
       t.order = nextOrder(t.due);
       touch(t); saveAll(); render();
-      el("addMsg").className = "ok"; el("addMsg").textContent = "✔「" + t.title + "」を" + shortDate(t.due) + "へ";
+      opMsg("✔「" + t.title + "」を" + shortDate(t.due) + "へ");
       return;
     }
     return;
@@ -998,7 +1163,6 @@ function onListClick(e) {
   var tt = taskById(row.getAttribute("data-id"));
   if (!tt) return;
   if (V.selecting) {
-    if (row.getAttribute("data-grp") === "done" || tt.sentAt) return;   // 送信済は選べない
     if (V.selected[tt.id]) delete V.selected[tt.id]; else V.selected[tt.id] = true;
     render();
     return;
@@ -1071,7 +1235,7 @@ function onTouchMove(e) { if (drag && drag.active) e.preventDefault(); }
 function renderSelCount() {
   var n = Object.keys(V.selected).length;
   el("selCount").textContent = n + "件を選択中";
-  el("selSend").disabled = !n || V.sending;
+  Array.prototype.forEach.call(document.querySelectorAll("#selbar [data-op]"), function (b) { b.disabled = !n || V.sending; });
 }
 function sendSelected() {
   var url = S.prefs.hookTask;
@@ -1081,8 +1245,12 @@ function sendSelected() {
     msg.textContent = "先に ⚙ 設定 で「Task Desk への送り先」を貼ってください。";
     return;
   }
-  var queue = S.tasks.filter(function (t) { return V.selected[t.id] && !t.sentAt && !t.done; });
-  if (!queue.length) return;
+  var sb = sendable(S.tasks, V.selected), queue = sb.queue, skipped = sb.skipped;
+  if (!queue.length) {
+    msg.className = "ng";
+    msg.textContent = "送れるもの（まだ送っていない・未完了）がありません。" + (skipped ? "（送信済・完了 " + skipped + "件は送りません）" : "");
+    return;
+  }
   V.sending = true;
   renderSelCount();
   msg.className = "";
@@ -1094,8 +1262,8 @@ function sendSelected() {
       V.selected = {};
       V.selecting = false;
       render();
-      el("addMsg").className = "ok";
-      el("addMsg").textContent = "✅ " + done + "件を Discord まで送りました。Task Desk に入るのは受け取り役（SD Bot）が動いているときです（止まっていても消えず、次に動かしたときに入ります）。";
+      el(V.tab === "cat" ? "catMsg" : "addMsg").className = "ok";
+      el(V.tab === "cat" ? "catMsg" : "addMsg").textContent = "✅ " + done + "件を Discord まで送りました" + (skipped ? "（送信済・完了 " + skipped + "件は飛ばしました）" : "") + "。Task Desk に入るのは受け取り役（SD Bot）が動いているときです（止まっていても消えず、次に動かしたときに入ります）。";
       return;
     }
     var t = queue[done];
@@ -1125,7 +1293,7 @@ function sendSelected() {
       delete V.selected[t.id];
       saveAll();
       done += 1;
-      renderList();
+      if (V.tab === "cat") renderCat(); else renderList();
       msg.textContent = "送っています…（" + done + "/" + queue.length + " ✅）";
       step();
     }).catch(function () {
@@ -1257,6 +1425,143 @@ function onSheetClick(e) {
   touch(t); saveAll(); renderSheet();
 }
 
+// ── 🗂 種類タブ ─────────────────────────────────
+/** 種類タブの並び：すべて → 種類（設定の順）→ 未分類（1件でもあるときだけ） */
+function catKeys() {
+  var keys = [""].concat(S.cats.map(function (c) { return c.id; }));
+  if (catCounts(S.tasks, S.cats, today()).none.any) keys.push("none");
+  return keys;
+}
+function catLabel(k) { if (k === "") return "すべて"; if (k === "none") return "未分類"; var c = findCat(S.cats, k); return c ? c.name : "すべて"; }
+/** 種類タブの一覧の中身（めくるときに隣の種類も描くので文字列で返す） */
+function catListHtml(cat) {
+  var v = catView(S.tasks, cat, V.catMode, today()), h = [], o = { grp: "cat", showDue: true, sleepy: true, tag: cat === "" };
+  function group(cls, title, list, extra) {
+    if (!list.length) return;
+    h.push('<div class="gh' + cls + '"><span>' + title + " " + list.length + "件</span></div>");
+    list.forEach(function (t) { h.push(rowHtml(t, Object.assign({}, o, extra || {}))); });
+  }
+  group(" late", "⚠ 期限切れ", v.overdue);
+  group("", "日付あり（近い順）", v.dated);
+  group("", "📌 期限なし", v.undated, { quick: true });
+  group("", "✔ 完了（新しい順・30日で自動で片付く）", v.done);
+  if (!h.length) {
+    h.push('<div class="empty">' + (V.catMode === "done" ? "完了したものはありません。" : "この種類のやることはありません。<br>上の欄に打って ＋ で入れられます。") + "</div>");
+  }
+  return h.join("");
+}
+function renderCat() {
+  var keys = catKeys();
+  if (keys.indexOf(V.catView) < 0) V.catView = "";          // 消した種類・0件になった未分類を見ていたら「すべて」へ
+  var cnt = catCounts(S.tasks, S.cats, today());
+  el("catTabs").innerHTML = keys.map(function (k) {
+    var c = findCat(S.cats, k), n = cnt[k] || { open: 0, late: 0 };
+    var dot = k === "" ? "" : '<i style="background:' + (c ? c.color : NONE_COLOR) + '"></i>';
+    return '<button class="ct' + (V.catView === k ? " on" : "") + '" data-cv="' + esc(k) + '">' + dot + esc(catLabel(k))
+      + "<small>" + n.open + "</small>" + (n.late ? "<em></em>" : "") + "</button>";
+  }).join("");
+  var on = el("catTabs").querySelector(".on"), bar = el("catTabs");
+  if (on) {
+    var r = on.getBoundingClientRect(), br = bar.getBoundingClientRect();
+    if (r.left < br.left) bar.scrollLeft -= br.left - r.left + 12;
+    else if (r.right > br.right) bar.scrollLeft += r.right - br.right + 12;
+  }
+  var v = cnt[V.catView] || { open: 0, any: 0 }, nDone = v.any - v.open;
+  el("catSeg").innerHTML = [["open", "未完了 " + v.open], ["done", "完了 " + nDone], ["all", "すべて"]].map(function (m) {
+    return '<button data-cm="' + m[0] + '"' + (V.catMode === m[0] ? ' class="on"' : "") + ">" + m[1] + "</button>";
+  }).join("");
+  el("catAddText").placeholder = V.catView === "" || V.catView === "none" ? "例）牛乳 #生活 @明日" : catLabel(V.catView) + " に入れる";
+  el("catList").innerHTML = catListHtml(V.catView);
+  fitToBottom(el("catBody"));
+  renderSelCount();
+}
+function setCatView(k) {
+  V.catView = k;
+  S.prefs.catView = k;            // 次に開いたときもこの種類から（16）
+  saveAll();
+  render();
+}
+
+// ── まとめての操作（一覧・種類タブ共通）────────────────────
+function selIds() { var ids = {}; Object.keys(V.selected).forEach(function (k) { if (taskById(k)) ids[k] = true; }); return ids; }
+/** 今の画面に出ている行を全部選ぶ（めくり用の隣の板は数えない） */
+function selectAllShown() {
+  var box = V.tab === "cat" ? el("catList") : el("groups");
+  Array.prototype.forEach.call(box.querySelectorAll(".row"), function (r) {
+    if (!r.closest(".pgpane")) V.selected[r.getAttribute("data-id")] = true;
+  });
+  render();
+}
+function opMsg(text, ng) { var m = el(V.tab === "cat" ? "catMsg" : "addMsg"); m.className = ng ? "" : "ok"; m.textContent = text; }
+function endSelect() { V.selecting = false; V.selected = {}; }
+function selSig() { return Object.keys(V.selected).sort().join(","); }
+/** 選んでいる画面の鍵（タブ・日・種類・未完了/完了）。変わったら選択を外す＝見えていない物に効かせない */
+function selViewKey() { return V.tab + "|" + (V.tab === "cat" ? V.catView + "|" + V.catMode : V.day + "|" + V.cat); }
+function onSelOp(e) {
+  var b = e.target.closest("[data-op]"); if (!b || b.disabled) return;
+  var op = b.getAttribute("data-op"), ids = selIds(), n = Object.keys(ids).length, iso = nowIso();
+  if (!n) return;
+  if (op === "send") { sendSelected(); return; }
+  if (op === "done") {
+    var r = completeMany(S.tasks, ids, new Date());
+    if (!r.ids.length) { el("selMsg").className = "ng"; el("selMsg").textContent = "選んだ物はもう全部完了しています。"; return; }
+    S.tasks = r.tasks; endSelect(); saveAll(); render();
+    showUndo("✔ " + r.ids.length + "件を完了にしました" + (r.spawned ? "（次の回 " + r.spawned + "件）" : ""), r.ids);
+    return;
+  }
+  if (op === "undone") {
+    var u = uncompleteMany(S.tasks, ids, iso);
+    if (!u.n) { el("selMsg").className = "ng"; el("selMsg").textContent = "選んだ物に完了したものがありません。"; return; }
+    S.tasks = u.tasks; endSelect(); saveAll(); render(); opMsg("↩ " + u.n + "件を未完了に戻しました");
+    return;
+  }
+  if (op === "imp") {
+    var onImp = toggleImpMany(S.tasks, ids, iso); endSelect(); saveAll(); render();
+    opMsg((onImp ? "⭐ " + n + "件を重要にしました" : n + "件の重要を外しました"));
+    return;
+  }
+  if (op === "del") {
+    var arm = armOr("selDel", b, "もう一度押すと" + n + "件消す", function () {
+      S.tasks = S.tasks.filter(function (t) { return !ids[t.id]; });
+      endSelect(); saveAll(); render(); opMsg("🗑 " + n + "件を消しました");
+    });
+    if (arm) arm.sig = selSig();         // 押した時点の選び方＝変わったら render で取り消す
+    return;
+  }
+  if (op === "due" || op === "cat") openPicker(op, n);
+}
+/** 📅 期限・🏷 種類を選ぶ（下から出る） */
+function openPicker(kind, n) {
+  var td = today(), h = [];
+  if (kind === "due") {
+    h.push("<b>📅 " + n + "件の期限を変える</b>");
+    h.push('<button class="pk" data-pk="due" data-v="' + td + '">今日（' + shortDate(td) + "）</button>");
+    h.push('<button class="pk" data-pk="due" data-v="' + addDays(td, 1) + '">明日（' + shortDate(addDays(td, 1)) + "）</button>");
+    h.push('<input type="date" id="pkDate" aria-label="日付を選ぶ">');
+    h.push('<button class="pk" data-pk="dueDate">選んだ日にする</button>');
+    h.push('<button class="pk" data-pk="due" data-v="">📌 期限なし</button>');
+  } else {
+    h.push("<b>🏷 " + n + "件の種類を変える</b>");
+    S.cats.forEach(function (c) { h.push('<button class="pk" data-pk="cat" data-v="' + esc(c.id) + '"><i style="background:' + c.color + '"></i>' + esc(c.name) + "</button>"); });
+    h.push('<button class="pk" data-pk="cat" data-v=""><i style="background:' + NONE_COLOR + '"></i>未分類</button>');
+  }
+  h.push('<button class="pk" data-pk="close" style="color:var(--muted)">やめる</button>');
+  el("picker").innerHTML = h.join("");
+  show("picker", true); show("sheetBack", true);
+}
+function closePicker() { show("picker", false); if (!V.sheetId) show("sheetBack", false); }
+function onPickerClick(e) {
+  var b = e.target.closest("[data-pk]"); if (!b) return;
+  var k = b.getAttribute("data-pk"), ids = selIds(), iso = nowIso(), v = b.getAttribute("data-v");
+  if (k === "close") { closePicker(); return; }
+  if (k === "dueDate") { v = el("pkDate").value; if (!v) { el("pkDate").focus(); return; } k = "due"; }
+  var n;
+  if (k === "due") n = setDueMany(S.tasks, ids, v, iso);
+  else n = setCatMany(S.tasks, ids, v, iso);
+  closePicker(); endSelect(); saveAll(); render();
+  opMsg(k === "due" ? "📅 " + n + "件を" + (v ? shortDate(v) : "期限なし") + "にしました" : "🏷 " + n + "件を「" + catLabel(v || "none") + "」にしました");
+}
+
 // ── 月のカレンダー ──────────────────────────────
 /** 右上の戻るボタン。一覧＝「今日」（今日以外を見ているときだけ）／カレンダー＝「今月」（今月以外を見ているときだけ）
  *  🔴 カレンダーは月をめくるたびに出す・隠すが変わる＝renderCal からも呼ぶ（render だけだとめくった後に古いまま） */
@@ -1265,7 +1570,7 @@ function paintTodayBtn() {
   var onCal = V.tab === "cal";
   el("goToday").textContent = onCal ? "今月" : "今日";
   var away = onCal ? (V.calY && (V.calY !== d.getFullYear() || V.calM !== d.getMonth() + 1)) : V.day !== td;
-  show("goToday", V.tab !== "set" && !!away);
+  show("goToday", (V.tab === "list" || V.tab === "cal") && !!away);
 }
 function renderCal() {
   if (!V.calY) { var d = toDate(V.day); V.calY = d.getFullYear(); V.calM = d.getMonth() + 1; }
@@ -1384,7 +1689,7 @@ function makePager(stage, content, opts) {
     var a = recent[0], z = recent[recent.length - 1];
     var vx = recent.length >= 2 && z.t > a.t ? (z.x - a.x) / (z.t - a.t) : 0;
     var flick = !still && Math.abs(st.dx) >= FLICK_MIN_PX && Math.abs(vx) >= FLICK_SPEED && (vx < 0) === (st.dx < 0);
-    if ((Math.abs(st.dx) < Math.min(60, w * 0.2) && !flick) || e.type === "pointercancel") {
+    if ((Math.abs(st.dx) < Math.min(60, w * 0.2) && !flick) || e.type === "pointercancel" || (opts.canGo && !opts.canGo(n))) {
       if (REDUCE_MOTION) return;
       busy = true; place(0, BACK_MS);
       setTimeout(function () { busy = false; clear(); }, BACK_MS + 20);
@@ -1404,7 +1709,7 @@ function makePager(stage, content, opts) {
   }, true);
   return { slide: slide };
 }
-var stripPager = null, listPager = null, calPager = null;
+var stripPager = null, listPager = null, calPager = null, catPager = null;
 /** 選んでいる日を n 日動かす。週をまたぐなら週の帯も同じ向きに滑らせる（またがなければ印が移るだけ） */
 function weekOf(day) { return weekDays(day, S.prefs.weekStart)[0]; }
 function setupPagers() {
@@ -1422,6 +1727,13 @@ function setupPagers() {
       if (weekOf(to) !== weekOf(V.day)) stripPager.slide(n > 0 ? 1 : -1, weekHtml(to), function () {});
     },
     commit: function (n) { V.day = addDays(V.day, n); render(); }
+  });
+  // 🗂 種類タブ：左右にめくると隣の種類へ（端より先へはめくらない）
+  catPager = makePager(el("catStage"), el("catList"), {
+    hit: el("catBody"),
+    html: function (n) { var ks = catKeys(), i = ks.indexOf(V.catView) + n; return i >= 0 && i < ks.length ? catListHtml(ks[i]) : ""; },
+    canGo: function (n) { var ks = catKeys(), i = ks.indexOf(V.catView) + n; return i >= 0 && i < ks.length; },
+    commit: function (n) { var ks = catKeys(); setCatView(ks[ks.indexOf(V.catView) + n]); }
   });
   calPager = makePager(el("calStage"), el("calGrid"), {
     hit: el("calView"),        // 見出し・説明・下の空きでも受ける（動くのはマスだけ）
@@ -1638,7 +1950,7 @@ function onImportFile(e) {
     renderSettings();
     var btn = document.querySelector('[data-set="import"]');
     setMsg.backup = "";
-    armed = {};
+    Object.keys(armed).forEach(disarm);   // 他のボタンの押し待ちは取り消して元の文字に
     // 🔴 置き換える前に件数を見せて、もう一度押させる
     btn.textContent = "置き換える（" + chk.data.tasks.length + "件）";
     btn.classList.add("armed");
@@ -1662,6 +1974,7 @@ function doImport() {
   }
   S.tasks = pendingImport.tasks;
   S.cats = pendingImport.cats;
+  fixOrphanCats();
   S.prefs.weekStart = pendingImport.prefs && pendingImport.prefs.weekStart || S.prefs.weekStart;
   pendingImport = null;
   V.cat = "";
@@ -1709,6 +2022,7 @@ function setupOffline() {
 // ── 始める ───────────────────────────────────
 function start() {
   loadAll();
+  V.catView = typeof S.prefs.catView === "string" ? S.prefs.catView : "";   // 種類タブは前回見ていた種類から（16）
   var kept = pruneDone(S.tasks, today());           // 完了から PRUNE_DAYS 日たったものを片付ける
   if (kept.length !== S.tasks.length) { S.tasks = kept; saveAll(); }
   V.day = today();
@@ -1737,15 +2051,22 @@ function start() {
   el("selToggle").addEventListener("click", function () {
     V.selecting = !V.selecting; V.selected = {};
     el("selMsg").className = "";
-    el("selMsg").textContent = "※ 送るのは題名・期限・種類・重要まで。繰り返し・小項目・メモは送られません。送信済（灰色）は選べません。";
+    el("selMsg").textContent = "※ Task Desk へ送るのは題名・期限・種類・重要まで（送信済・完了は飛ばします）。";
     render();
   });
-  el("selCancel").addEventListener("click", function () { V.selecting = false; V.selected = {}; render(); });
-  el("selSend").addEventListener("click", sendSelected);
+  el("selAll").addEventListener("click", selectAllShown);
+  el("selNone").addEventListener("click", function () { V.selected = {}; render(); });
+  el("selbar").addEventListener("click", onSelOp);
+  el("picker").addEventListener("click", onPickerClick);
+  // 🗂 種類タブ
+  el("catTabs").addEventListener("click", function (e) { var b = e.target.closest("[data-cv]"); if (b) setCatView(b.getAttribute("data-cv")); });
+  el("catSeg").addEventListener("click", function (e) { var b = e.target.closest("[data-cm]"); if (b) { V.catMode = b.getAttribute("data-cm"); render(); } });
+  el("catList").addEventListener("click", onListClick);
+  el("catAddForm").addEventListener("submit", function (e) { e.preventDefault(); addFromInput(true, "cat"); });
   el("tabs").addEventListener("click", function (e) {
     var b = e.target.closest("[data-tab]"); if (!b) return;
     V.tab = b.getAttribute("data-tab");
-    if (V.tab !== "list") { V.selecting = false; V.selected = {}; }
+    V.selecting = false; V.selected = {};         // 画面をまたいで選んだままにしない
     if (V.tab === "cal") V.calY = 0;
     V.editCat = null;
     // 前に開いたときの知らせを持ち越さない（別の操作の警告が残って紛らわしいため）
@@ -1756,7 +2077,7 @@ function start() {
   el("calPrev").addEventListener("click", function () { stepMonth(-1); });
   el("calNext").addEventListener("click", function () { stepMonth(1); });
   setupPagers();
-  window.addEventListener("resize", function () { if (V.tab === "list") fitListHeight(); if (V.tab === "cal") fitToBottom(el("calView")); });
+  window.addEventListener("resize", function () { if (V.tab === "list") fitListHeight(); if (V.tab === "cal") fitToBottom(el("calView")); if (V.tab === "cat") fitToBottom(el("catBody")); });
   el("calGrid").addEventListener("click", function (e) {
     var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); V.tab = "list"; render(); }
   });
@@ -1771,13 +2092,15 @@ function start() {
   el("sheet").addEventListener("input", onSheetInput);
   el("sheet").addEventListener("change", onSheetChange);
   el("sheet").addEventListener("keydown", onSheetKey);
-  el("sheetBack").addEventListener("click", closeSheet);
+  el("sheetBack").addEventListener("click", function () { if (!el("picker").classList.contains("hide")) { closePicker(); return; } closeSheet(); });
   el("toastUndo").addEventListener("click", function () {
     if (!undoState) return;
     clearTimeout(undoState.timer);
-    var id = undoState.id; undoState = null;
+    var ids = undoState.ids; undoState = null;
     show("toast", false);
-    undoComplete(id);
+    var set = {}; ids.forEach(function (i) { set[i] = true; });
+    S.tasks = uncompleteMany(S.tasks, set, nowIso()).tasks;
+    saveAll(); render();
   });
   // 🔴 日付が変わってから開き直したとき（閉じずに翌日）も「今日」と数字を数え直す
   document.addEventListener("visibilitychange", function () {
