@@ -772,9 +772,9 @@ function renderList() {
   fitListHeight();
   renderSelCount();
 }
-/** 一覧の下の空いた所でもスワイプできるように、画面の下（タブの上）まで伸ばす */
-function fitListHeight() {
-  var box = el("groups");
+/** 下の空いた所でもスワイプできるように、画面の下（タブの上）まで伸ばす（一覧・カレンダー） */
+function fitListHeight() { fitToBottom(el("groups")); }
+function fitToBottom(box) {
   box.style.minHeight = "";
   var top = box.getBoundingClientRect().top + window.scrollY;
   box.style.minHeight = Math.max(0, window.innerHeight - el("tabs").offsetHeight - top) + "px";
@@ -1236,6 +1236,7 @@ function renderCal() {
   if (!V.calY) { var d = toDate(V.day); V.calY = d.getFullYear(); V.calM = d.getMonth() + 1; }
   el("calTitle").textContent = V.calY + "年" + V.calM + "月";
   el("calGrid").innerHTML = calHtml(V.calY, V.calM);
+  fitToBottom(el("calView"));
 }
 // y年m月のマス。めくるときに前後の月も描くので文字列で返す
 function calHtml(y, m) {
@@ -1387,6 +1388,7 @@ function setupPagers() {
     commit: function (n) { V.day = addDays(V.day, n); render(); }
   });
   calPager = makePager(el("calStage"), el("calGrid"), {
+    hit: el("calView"),        // 見出し・説明・下の空きでも受ける（動くのはマスだけ）
     html: function (n) { var t = addMonth(V.calY, V.calM, n); return calHtml(t[0], t[1]); },
     commit: function (n) { shiftMonth(n); }
   });
@@ -1708,7 +1710,7 @@ function start() {
   el("calPrev").addEventListener("click", function () { stepMonth(-1); });
   el("calNext").addEventListener("click", function () { stepMonth(1); });
   setupPagers();
-  window.addEventListener("resize", function () { if (V.tab === "list") fitListHeight(); });
+  window.addEventListener("resize", function () { if (V.tab === "list") fitListHeight(); if (V.tab === "cal") fitToBottom(el("calView")); });
   el("calGrid").addEventListener("click", function (e) {
     var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); V.tab = "list"; render(); }
   });
