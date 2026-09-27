@@ -112,6 +112,22 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .star{flex:none;font-size:22px;color:#CFCBC0;width:30px;text-align:center;line-height:1}
 .star.on{color:var(--star)}
 .mini{flex:none;font-size:12px;border:1px solid var(--acc);color:var(--acc);border-radius:8px;padding:3px 7px}
+/* 一覧で開く小項目（2026-09-28）。札は小さいまま、押せる範囲だけ透明の枠で広げる */
+.pill{position:relative;display:inline-block;border:1px solid var(--line);border-radius:10px;padding:1px 8px;background:var(--bg2);color:var(--ink2);cursor:pointer;white-space:nowrap}
+.pill:after{content:"";position:absolute;left:-8px;right:-8px;top:-4px;bottom:-10px}   /* 上は控えめ＝題名の下の方を押したら詳細画面のまま */
+.pill.all{border-color:var(--acc);color:var(--acc)}
+.pill.open{background:var(--acc-soft);border-color:var(--acc);color:var(--acc)}
+.row.open{flex-wrap:wrap;row-gap:4px}
+.row input{-webkit-user-select:text;user-select:text;-webkit-touch-callout:default}   /* 行は文字選択を止めている＝欄だけ長押しの貼り付けを戻す */
+.subx{flex-basis:100%;padding:2px 0 0 46px}
+.sxr{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:15px;cursor:pointer}
+.sxr .chk{width:22px;height:22px}
+.sxr .chk.done:after{left:3px;top:-2px;font-size:14px}
+.sxr.done .sxt{color:var(--muted);text-decoration:line-through}
+.sxt{word-break:break-word;line-height:1.35}
+.sxr.add{color:var(--muted);font-size:14px}
+.sxhint{font-size:12px;color:var(--acc);padding:2px 0 4px}
+.sxadd{padding:4px 0 6px}
 .empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:14px;line-height:1.7}
 
 /* F 選んで送る */
@@ -313,7 +329,8 @@ var KEYS = {
   cats: "iphone_todo_cats_v1",
   prefs: "iphone_todo_prefs_v1",
   broken: "iphone_todo_broken_v1",  // 読めなかった保存データの退避先（上書きで消さないため）
-  beforeImport: "iphone_todo_before_import_v1"   // 控えで置き換える直前の全件（直前の1回ぶんだけ）
+  beforeImport: "iphone_todo_before_import_v1",  // 控えで置き換える直前の全件（直前の1回ぶんだけ）
+  subsOpen: "iphone_todo_subs_open_v1"          // 一覧で小項目を開いているタスク（表示の好み＝控えには入れない・2026-09-28）
 };
 var SEND_MAX_CHARS = 2000;         // Discord の1通の上限
 var SEND_RETRIES = 3;              // 回数制限（429）で待って送り直す回数
@@ -697,6 +714,13 @@ function pruneDone(tasks, today, cats) {
     return !(t.done && t.doneAt && daysBetween(ymd(new Date(t.doneAt)), today) >= PRUNE_DAYS);
   });
 }
+/** 小項目を開いている印のうち、今あるタスクの分だけ残す（消した・片付いたタスクの印が溜まらないように） */
+function pruneOpenIds(open, tasks) {
+  var have = {}, out = {};
+  tasks.forEach(function (t) { have[t.id] = true; });
+  Object.keys(open || {}).forEach(function (id) { if (open[id] === true && have[id]) out[id] = true; });
+  return out;
+}
 /** アイコンの数字＝今日と期限切れの残り（期限なし・明日以降は数えない） */
 function badgeCount(tasks, today) {
   return tasks.filter(function (t) { return !t.done && t.due && t.due <= today; }).length;
@@ -810,7 +834,8 @@ function backupNag(lastBackup, taskCount, today) {
 var S = { tasks: [], cats: [], prefs: {} };
 var V = { tab: "list", day: "", cat: "", selecting: false, selected: {}, impOpen: true,
           undatedOpen: false, doneOpen: false, calY: 0, calM: 0, editCat: null, sheetId: null,
-          sending: false, pinMode: false, catView: "", catMode: "open" };
+          sending: false, pinMode: false, catView: "", catMode: "open",
+          subsOpen: {}, subAddFor: null, subDrafts: {} };   // subDrafts＝打ちかけの小項目（描き直しで消えないように）   // 一覧で小項目を開いているタスク／「＋ 足す」の欄を出しているタスク
 
 function el(id) { return document.getElementById(id); }
 function show(id, on) { el(id).classList.toggle("hide", !on); }
@@ -854,6 +879,7 @@ function loadAll() {
   S.cats.forEach(function (c) { if (typeof c.color !== "string" || !c.color) c.color = NONE_COLOR; });
   // 無い種類の番号を持つタスクは未分類へ（控えの取り込み・古いデータで起こりうる＝どの種類タブにも出なくなるのを防ぐ）
   fixOrphanCats();
+  loadSubsOpen();
   if (broken.length) {
     try {
       localStorage.setItem(KEYS.broken, JSON.stringify({ at: nowIso(), tasks: rt, cats: rc, prefs: rp }));
@@ -877,6 +903,16 @@ function saveAll() {
   updateBadge();
 }
 function touch(t) { t.touchedAt = nowIso(); }
+// 一覧で小項目を開いている印（表示の好み）。読めない・書けないときは黙って空で続ける（タスクのデータには触らない）
+function loadSubsOpen() {
+  var o = {};
+  try { o = JSON.parse(localStorage.getItem(KEYS.subsOpen) || "{}"); } catch (e) { o = {}; }
+  V.subsOpen = pruneOpenIds(o && typeof o === "object" ? o : {}, S.tasks);
+}
+function saveSubsOpen() {
+  V.subsOpen = pruneOpenIds(V.subsOpen, S.tasks);
+  try { localStorage.setItem(KEYS.subsOpen, JSON.stringify(V.subsOpen)); } catch (e) { /* 表示の好みなので黙る */ }
+}
 
 // ── アイコンの数字 ──────────────────────────────
 function updateBadge() {
@@ -915,6 +951,8 @@ function render() {
     V.selView = vk;
   } else V.selView = "";
   if (armed.selDel && (!V.selecting || armed.selDel.sig !== selSig())) disarm("selDel");
+  // 🔴 一覧の中のボタンは描き直しで作り直される＝押し待ちを残すと、見た目は戻ったのに次の1回で確認なしに実行される
+  disarm("delDone"); disarm("allToday");
   var d = toDate(V.day);
   el("hdrTitle").innerHTML = V.tab === "list"
     ? esc((d.getMonth() + 1) + "月" + d.getDate() + "日（" + WEEKDAY_JP[weekdayOf(V.day)] + "）") + (V.day === td ? "<small>今日</small>" : "")
@@ -1045,9 +1083,18 @@ function rowHtml(t, o) {
   } else if (o.showDue) sub.push("期限なし");
   var rep = repeatText(t.repeat);
   if (rep) sub.push("🔁 " + rep);
+  // 小項目＝札を押すとその場で開く（選ぶ中はただの文字・中身も隠す＝選ぶ動作と混ざらないように・2026-09-28）
+  var open = false, allDone = false;
   if (t.subs.length) {
     var dn = t.subs.filter(function (s) { return s.done; }).length;
-    sub.push("小項目 " + dn + "/" + t.subs.length);
+    allDone = dn === t.subs.length;
+    var label = "小項目 " + dn + "/" + t.subs.length + (allDone ? " ✓" : "");
+    if (V.selecting) sub.push(label);
+    else {
+      open = !!V.subsOpen[t.id];
+      sub.push('<span class="pill' + (open ? " open" : "") + (allDone ? " all" : "") + '" data-act="subsToggle">'
+        + (open ? "▼ " : "▶ ") + label + "</span>");
+    }
   }
   if ((o.grp === "undated" || o.sleepy) && isSleepy(t, td)) sub.push("💤 " + sleepyDays(t, td) + "日さわっていない");
   if (t.note) sub.push("📝");
@@ -1066,12 +1113,29 @@ function rowHtml(t, o) {
   if (!V.selecting && !t.done) {
     right += '<button class="star' + (t.imp ? " on" : "") + '" data-act="star" aria-label="重要">' + (t.imp ? "★" : "☆") + "</button>";
   }
-  return '<div class="row' + (t.imp && !t.done ? " imp" : "") + (t.done ? " isdone" : "")
+  // 開いた中身は行の内側に置く＝長押しの並べ替えで行と一緒に動く
+  return '<div class="row' + (t.imp && !t.done ? " imp" : "") + (t.done ? " isdone" : "") + (open ? " open" : "")
     + '" data-id="' + esc(t.id) + '" data-grp="' + o.grp + '">' + left
     + '<span class="dot" style="background:' + (cat ? cat.color : NONE_COLOR) + '"></span>'
     + '<div class="t"><div class="ti">' + esc(t.title)
     + (cat && (o.tag !== undefined ? o.tag : V.cat === "") ? '<span class="tag">' + esc(cat.name) + "</span>" : "") + "</div>"
-    + (sub.length ? "<small>" + sub.join("・") + "</small>" : "") + "</div>" + right + "</div>";
+    + (sub.length ? "<small>" + sub.join("・") + "</small>" : "") + "</div>" + right
+    + (open ? subsHtml(t, allDone) : "") + "</div>";
+}
+/** 一覧で開いた小項目（チェックと「＋ 足す」だけ。消すのは詳細画面＝丸と ✕ の押し間違いを防ぐ） */
+function subsHtml(t, allDone) {
+  var h = ['<div class="subx">'];
+  t.subs.forEach(function (s, i) {
+    h.push('<div class="sxr' + (s.done ? " done" : "") + '" data-act="subChk" data-i="' + i + '"><span class="chk' + (s.done ? " done" : "")
+      + '"></span><span class="sxt">' + esc(s.t) + "</span></div>");
+  });
+  if (allDone && !t.done) h.push('<div class="sxhint">✓ 全部済みました（左の丸を押すと完了）</div>');
+  if (V.subAddFor === t.id) {
+    h.push('<div class="sxadd"><input class="sin" data-subnew="' + esc(t.id) + '" value="' + esc(V.subDrafts[t.id] || "")
+      + '" placeholder="打って Enter で足す" enterkeyhint="done"></div>');
+  } else h.push('<div class="sxr add" data-act="subAdd">＋ 足す</div>');
+  h.push("</div>");
+  return h.join("");
 }
 
 // ── 入れる ───────────────────────────────────
@@ -1110,7 +1174,10 @@ function nextOrder(due) {
 var undoState = null;
 function doComplete(t) {
   var next = completeTask(t, new Date());
-  if (next) { S.tasks.push(next); t.spawned = next.id; }
+  if (next) {
+    S.tasks.push(next); t.spawned = next.id;
+    if (V.subsOpen[t.id]) { V.subsOpen[next.id] = true; saveSubsOpen(); }   // 次の回も開いたまま（毎月の買い出しなど）
+  }
   delete V.selected[t.id];      // 選んで送る途中に完了にしたものは送らない
   touch(t);
   saveAll();
@@ -1168,6 +1235,21 @@ function onListClick(e) {
       return;
     }
     if (a === "star") { t.imp = !t.imp; touch(t); saveAll(); render(); return; }
+    // 小項目をその場で開く・チェック・足す（詳細画面の subChk・subNew と同じ手順）
+    if (a === "subsToggle") {
+      if (V.subsOpen[t.id]) delete V.subsOpen[t.id]; else V.subsOpen[t.id] = true;
+      if (V.subAddFor === t.id) V.subAddFor = null;
+      saveSubsOpen(); render();
+      return;
+    }
+    if (a === "subChk") {
+      var s = t.subs[+act.getAttribute("data-i")];
+      if (!s) return;
+      s.done = !s.done;
+      touch(t); saveAll(); render();
+      return;
+    }
+    if (a === "subAdd") { V.subAddFor = t.id; render(); focusSubNew(t.id); return; }
     if (a === "toToday" || a === "toTomorrow") {
       t.due = a === "toToday" ? today() : addDays(today(), 1);
       t.order = nextOrder(t.due);
@@ -1178,6 +1260,7 @@ function onListClick(e) {
     return;
   }
   if (!row) return;
+  if (e.target.closest(".subx")) return;     // 開いた小項目の空いた所・入力欄を押しても詳細画面は開かない
   var tt = taskById(row.getAttribute("data-id"));
   if (!tt) return;
   if (V.selecting) {
@@ -1188,12 +1271,34 @@ function onListClick(e) {
   openSheet(tt.id);
 }
 
+/** 一覧の「＋ 足す」の欄に Enter＝小項目を1つ足して、描き直した後の新しい欄へ戻る（詳細画面の onSheetKey と同じ形） */
+function onListKey(e) {
+  var id = e.target.getAttribute && e.target.getAttribute("data-subnew");
+  if (e.key !== "Enter" || !id || e.isComposing || e.keyCode === 229) return;   // 変換の確定の Enter では足さない
+  e.preventDefault();
+  var t = taskById(id), v = e.target.value.trim();
+  if (!t || !v) return;
+  t.subs.push({ t: v, done: false });
+  delete V.subDrafts[id];
+  touch(t); saveAll(); render();
+  focusSubNew(id);
+}
+/** 打ちかけの文字を覚える（丸・☆・別アプリから戻るなど、描き直しのたびに欄が空で作り直されるため） */
+function onListInput(e) {
+  var id = e.target.getAttribute && e.target.getAttribute("data-subnew");
+  if (id) V.subDrafts[id] = e.target.value;
+}
+function focusSubNew(id) {
+  var box = document.querySelector('[data-subnew="' + (window.CSS && CSS.escape ? CSS.escape(id) : id) + '"]');
+  if (box) box.focus();
+}
+
 // ── 長押しで並べ替え（その日・期限なし・⭐重要の中だけ）─────────────
 // ⭐重要は期限の近い順に並ぶ＝**同じ期限の行どうしだけ**入れ替えられる（日付をまたぐと次の描画で戻るため・2026-09-27 ユーザー決定 B）
 var drag = null, dragJustEnded = false;
 function onPointerDown(e) {
   var row = e.target.closest(".row");
-  if (!row || V.selecting || e.target.closest("[data-act]")) return;
+  if (!row || V.selecting || e.target.closest("[data-act]") || e.target.closest("input")) return;
   var grp = row.getAttribute("data-grp");
   if (grp !== "day" && grp !== "undated" && grp !== "imp") return;
   var own = taskById(row.getAttribute("data-id"));
@@ -1408,7 +1513,7 @@ function onSheetChange(e) {
   touch(t); saveAll(); renderSheet();
 }
 function onSheetKey(e) {
-  if (e.key !== "Enter" || e.target.getAttribute("data-sh") !== "subNew") return;
+  if (e.key !== "Enter" || e.target.getAttribute("data-sh") !== "subNew" || e.isComposing || e.keyCode === 229) return;
   e.preventDefault();
   var t = taskById(V.sheetId);
   var v = e.target.value.trim();
@@ -1428,7 +1533,10 @@ function onSheetClick(e) {
   if (k === "imp") { t.imp = !t.imp; }
   else if (k === "noDue") { t.due = ""; t.order = nextOrder(""); }
   else if (k === "subChk") { var s = t.subs[+b.getAttribute("data-i")]; s.done = !s.done; }
-  else if (k === "subDel") { t.subs.splice(+b.getAttribute("data-i"), 1); }
+  else if (k === "subDel") {
+    t.subs.splice(+b.getAttribute("data-i"), 1);
+    if (!t.subs.length) { delete V.subsOpen[t.id]; delete V.subDrafts[t.id]; if (V.subAddFor === t.id) V.subAddFor = null; saveSubsOpen(); }
+  }
   else if (k === "resend") { t.sentAt = ""; }
   else if (k === "del") {
     armOr("del", b, "もう一度押すと消します", function () {
@@ -1524,7 +1632,10 @@ function onSelOp(e) {
   if (op === "done") {
     var r = completeMany(S.tasks, ids, new Date());
     if (!r.ids.length) { el("selMsg").className = "ng"; el("selMsg").textContent = "選んだ物はもう全部完了しています。"; return; }
-    S.tasks = r.tasks; endSelect(); saveAll(); render();
+    S.tasks = r.tasks;
+    r.ids.forEach(function (id) { var t = taskById(id); if (t && t.spawned && V.subsOpen[id]) V.subsOpen[t.spawned] = true; });  // 1件ずつ（doComplete）と同じく次の回も開いたまま
+    saveSubsOpen();
+    endSelect(); saveAll(); render();
     showUndo("✔ " + r.ids.length + "件を完了にしました" + (r.spawned ? "（次の回 " + r.spawned + "件）" : ""), r.ids);
     return;
   }
@@ -1750,6 +1861,7 @@ function setupPagers() {
   // 🗂 種類タブ：左右にめくると隣の種類へ（端より先へはめくらない）
   catPager = makePager(el("catStage"), el("catList"), {
     hit: el("catBody"),
+    canStart: function (e) { return !e.target.closest("input,textarea,select"); },   // 小項目の欄で文字位置を動かしてもめくらない
     html: function (n) { var ks = catKeys(), i = ks.indexOf(V.catView) + n; return i >= 0 && i < ks.length ? catListHtml(ks[i]) : ""; },
     canGo: function (n) { var ks = catKeys(), i = ks.indexOf(V.catView) + n; return i >= 0 && i < ks.length; },
     commit: function (n) { var ks = catKeys(); setCatView(ks[ks.indexOf(V.catView) + n]); }
@@ -2066,6 +2178,10 @@ function start() {
   el("addForm").addEventListener("submit", function (e) { e.preventDefault(); addFromInput(false); });
   el("addPin").addEventListener("click", function () { addFromInput(true); });
   el("groups").addEventListener("click", onListClick);
+  el("groups").addEventListener("keydown", onListKey);
+  el("catList").addEventListener("keydown", onListKey);
+  el("groups").addEventListener("input", onListInput);
+  el("catList").addEventListener("input", onListInput);
   el("groups").addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointermove", onPointerMove, { passive: false });
   document.addEventListener("pointerup", onPointerUp);
