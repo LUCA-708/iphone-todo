@@ -274,7 +274,7 @@ var NONE_COLOR = "#A5A39A";                // 未分類＝目立たせない（T
 var WEEKDAY_JP = ["月", "火", "水", "木", "金", "土", "日"];   // 月0〜日6（Python と同じ並び）
 
 var SLEEPY_DAYS = 30;      // 期限なしがこの日数さわられていないと 💤
-var PRUNE_DAYS = 90;       // 完了からこの日数たったら片付ける
+var PRUNE_DAYS = 30;       // 完了からこの日数たったら片付ける（90→30・2026-09-27 ユーザー指定）
 var NAG_DAYS = 14;         // 控えをこの日数書き出していないと一言
 var IMP_FOLD_OVER = 5;     // 重要がこの件数を超えたら畳める
 
@@ -516,6 +516,13 @@ function isSleepy(t, today) {
 }
 function sleepyDays(t, today) { return daysBetween(ymd(new Date(t.touchedAt)), today); }
 /** 完了から PRUNE_DAYS 日たったものを除いた一覧を返す（控えには残っている） */
+/** 「完了した ○件」の組に出ているもの（その日に完了・種類の絞り込みも同じ）を除いた残り。
+ *  🔴 消す対象は**画面に出ている組と同じ数え方**（groupTasks）で決める＝見えていない物を消さない */
+function removeDoneOn(tasks, day, today, cat) {
+  var gone = {};
+  groupTasks(tasks, day, today, cat).done.forEach(function (t) { gone[t.id] = true; });
+  return tasks.filter(function (t) { return !gone[t.id]; });
+}
 function pruneDone(tasks, today) {
   return tasks.filter(function (t) {
     return !(t.done && t.doneAt && daysBetween(ymd(new Date(t.doneAt)), today) >= PRUNE_DAYS);
@@ -832,7 +839,8 @@ function groupsHtml(day) {
   // E 完了
   if (g.done.length) {
     h.push('<div class="gh fold" data-act="doneFold"><span>' + (V.doneOpen ? "▼" : "▶") + " "
-      + (day === td ? "今日" : shortDate(day) + " に") + " 完了した " + g.done.length + "件</span></div>");
+      + (day === td ? "今日" : shortDate(day) + " に") + " 完了した " + g.done.length + "件</span>"
+      + (V.selecting ? "" : '<button class="gbtn" data-act="delDone">まとめて消す</button>') + "</div>");
     if (V.doneOpen) g.done.forEach(function (t) { h.push(rowHtml(t, { grp: "done" })); });
   }
   return h.join("");
@@ -951,6 +959,16 @@ function onListClick(e) {
     if (a === "impFold") { V.impOpen = !V.impOpen; render(); return; }
     if (a === "undatedFold") { V.undatedOpen = !V.undatedOpen; render(); return; }
     if (a === "doneFold") { V.doneOpen = !V.doneOpen; render(); return; }
+    if (a === "delDone") {
+      var nDone = groupTasks(S.tasks, V.day, today(), V.cat).done.length;
+      armOr("delDone", act, "もう一度押すと" + nDone + "件消す", function () {
+        var before = S.tasks.length;
+        S.tasks = removeDoneOn(S.tasks, V.day, today(), V.cat);
+        saveAll(); render();
+        el("addMsg").className = "ok"; el("addMsg").textContent = "✔ 完了した" + (before - S.tasks.length) + "件を消しました";
+      });
+      return;
+    }
     if (a === "allToday") {
       armOr("allToday", act, "もう一度押すと全部今日へ", function () {
         var n = moveOverdueToToday(S.tasks, today(), nowIso());
@@ -1691,7 +1709,7 @@ function setupOffline() {
 // ── 始める ───────────────────────────────────
 function start() {
   loadAll();
-  var kept = pruneDone(S.tasks, today());           // 完了から90日たったものを片付ける
+  var kept = pruneDone(S.tasks, today());           // 完了から PRUNE_DAYS 日たったものを片付ける
   if (kept.length !== S.tasks.length) { S.tasks = kept; saveAll(); }
   V.day = today();
 
