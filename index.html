@@ -769,9 +769,11 @@ function renderList() {
     return '<button class="f' + (V.cat === c.id ? " on" : "") + '" data-cat="' + esc(c.id) + '">' + dot + esc(c.name) + "</button>";
   }).join("");
 
+  // 🔴 入力欄は iPhone の幅（375px）で文字が約214pxしか入らない＝長い案内文は途中で切れる（2026-09-27 実測）。
+  //    iPhone は字体が違うので余裕を残す長さに（今日＝196px・他の日＝一番長い「12/28（月）」で159px）
   el("addText").placeholder = V.day === td
-    ? "やることを入れる（@明日 #仕事 !高 も書ける）"
-    : shortDate(V.day) + " に入れる（@ で別の日も）";
+    ? "例）牛乳 @明日 #生活 !高"
+    : shortDate(V.day) + "に入れる";
 
   el("impBox").innerHTML = impHtml();
   el("dayGroups").innerHTML = groupsHtml(V.day);
