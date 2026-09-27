@@ -1269,10 +1269,14 @@ function shiftMonth(n) {
 // 🔴 iPhone 本体の「視差効果を減らす」がオンなら、指について来ずに離した時点で切り替えるだけ
 var REDUCE_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
 var PAGE_MS = 220, BACK_MS = 180;
+var FLICK_SPEED = 0.35, FLICK_MIN_PX = 20;   // はじき＝秒速350px以上で20px以上動いた
 var swipedAt = 0;          // めくった時刻＝直後の「押した」を1回捨てる（行の詳細が開く・日が選ばれるのを防ぐ）
 function makePager(stage, content, opts) {
   var g = null, busy = false, panes = [];
   var hit = opts.hit || stage;       // 指を受ける所（一覧は重要の上・下の空きでも受ける）
+  // 🔴 指を受ける所全体に「横はアプリ・縦は画面のスクロール」を付ける。付けないと横に動かした瞬間に
+  //    iPhone が操作を持っていき、アプリには「やめた（pointercancel）」しか届かない（09-27 実機で空いた所が効かなかった）
+  hit.style.touchAction = "pan-y";
   function place(dx, ms) {
     var list = [panes[0], content, panes[1]];
     list.forEach(function (p, i) {
@@ -1312,7 +1316,7 @@ function makePager(stage, content, opts) {
   hit.addEventListener("pointerdown", function (e) {
     if (busy || (e.pointerType === "mouse" && e.button !== 0)) return;
     if (opts.canStart && !opts.canStart(e)) return;
-    g = { x: e.clientX, y: e.clientY, dx: 0, lock: null, id: e.pointerId };
+    g = { x: e.clientX, y: e.clientY, dx: 0, lock: null, id: e.pointerId, pts: [{ x: e.clientX, t: e.timeStamp }], lastT: e.timeStamp };
   });
   document.addEventListener("pointermove", function (e) {
     if (!g || e.pointerId !== g.id) return;
@@ -1325,6 +1329,9 @@ function makePager(stage, content, opts) {
     }
     if (g.lock !== "x") return;
     g.dx = dx;
+    // 指の通り道（直近 0.15秒ぶん）＝離したときの速さを「最後の 0.1秒」だけで測るため
+    g.pts.push({ x: e.clientX, t: e.timeStamp }); g.lastT = e.timeStamp;
+    while (g.pts.length > 2 && g.pts[0].t < e.timeStamp - 150) g.pts.shift();
     if (!REDUCE_MOTION) place(dx, 0);
   });
   function up(e) {
@@ -1333,7 +1340,14 @@ function makePager(stage, content, opts) {
     if (st.lock !== "x") return;
     swipedAt = Date.now();
     var w = stage.clientWidth, n = st.dx < 0 ? 1 : -1;
-    if (Math.abs(st.dx) < Math.min(60, w * 0.2) || e.type === "pointercancel") {
+    // めくる＝十分動かした、または短くても同じ向きに速くはじいた（止まってから離したらはじきにしない）
+    //   🔴 速さは最後の 0.1秒だけで測る（前の動きの速さを引きずると、止めてから逆にはじいたのを取り違える）
+    var still = e.timeStamp - st.lastT > 80;
+    var recent = st.pts.filter(function (q) { return q.t >= st.lastT - 100; });
+    var a = recent[0], z = recent[recent.length - 1];
+    var vx = recent.length >= 2 && z.t > a.t ? (z.x - a.x) / (z.t - a.t) : 0;
+    var flick = !still && Math.abs(st.dx) >= FLICK_MIN_PX && Math.abs(vx) >= FLICK_SPEED && (vx < 0) === (st.dx < 0);
+    if ((Math.abs(st.dx) < Math.min(60, w * 0.2) && !flick) || e.type === "pointercancel") {
       if (REDUCE_MOTION) return;
       busy = true; place(0, BACK_MS);
       setTimeout(function () { busy = false; clear(); }, BACK_MS + 20);
