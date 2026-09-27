@@ -201,7 +201,8 @@ input,select,textarea{font:inherit;color:var(--ink)}
     <button type="submit" id="addGo" aria-label="入れる">＋</button>
   </form>
   <div id="addMsg"></div>
-  <div id="groupsStage" class="pgstage"><div id="groups" class="groups"></div></div>
+  <!-- 一覧：⭐重要は日に関係なく同じ＝止めたまま、その下だけが指についてくる。スワイプは #groups のどこでも受ける -->
+  <div id="groups"><div id="impBox"></div><div id="groupsStage" class="pgstage"><div id="dayGroups" class="groups"></div></div></div>
 </section>
 
 <section id="calView" class="hide">
@@ -766,16 +767,22 @@ function renderList() {
     ? "やることを入れる（@明日 #仕事 !高 も書ける）"
     : shortDate(V.day) + " に入れる（@ で別の日も）";
 
-  el("groups").innerHTML = groupsHtml(V.day);
+  el("impBox").innerHTML = impHtml();
+  el("dayGroups").innerHTML = groupsHtml(V.day);
+  fitListHeight();
   renderSelCount();
 }
-// 一覧（day の日を見ているときの中身）。めくるときに前日・翌日も描くので文字列で返す
-function groupsHtml(day) {
-  var td = today();
-  var g = groupTasks(S.tasks, day, td, V.cat);
+/** 一覧の下の空いた所でもスワイプできるように、画面の下（タブの上）まで伸ばす */
+function fitListHeight() {
+  var box = el("groups");
+  box.style.minHeight = "";
+  var top = box.getBoundingClientRect().top + window.scrollY;
+  box.style.minHeight = Math.max(0, window.innerHeight - el("tabs").offsetHeight - top) + "px";
+}
+// Q ⭐ 重要（日付に関係なく全部）＝めくっても動かさない
+function impHtml() {
+  var g = groupTasks(S.tasks, V.day, today(), V.cat);
   var h = [];
-
-  // Q ⭐ 重要（日付に関係なく全部）
   if (g.imp.length) {
     var many = g.imp.length > IMP_FOLD_OVER;
     h.push('<div class="gh imphead"><span>⭐ 重要 ' + g.imp.length + "件</span>"
@@ -786,6 +793,13 @@ function groupsHtml(day) {
       h.push("</div>");
     }
   }
+  return h.join("");
+}
+// 一覧のうち日によって変わる所（day の日を見ているとき）。めくるときに前日・翌日も描くので文字列で返す
+function groupsHtml(day) {
+  var td = today();
+  var g = groupTasks(S.tasks, day, td, V.cat);
+  var h = [];
   // ⚠ 期限切れ（今日を見ているときだけ）
   if (g.overdue.length) {
     h.push('<div class="gh late"><span>⚠ 期限切れ ' + g.overdue.length + '件</span>'
@@ -1258,6 +1272,7 @@ var PAGE_MS = 220, BACK_MS = 180;
 var swipedAt = 0;          // めくった時刻＝直後の「押した」を1回捨てる（行の詳細が開く・日が選ばれるのを防ぐ）
 function makePager(stage, content, opts) {
   var g = null, busy = false, panes = [];
+  var hit = opts.hit || stage;       // 指を受ける所（一覧は重要の上・下の空きでも受ける）
   function place(dx, ms) {
     var list = [panes[0], content, panes[1]];
     list.forEach(function (p, i) {
@@ -1294,7 +1309,7 @@ function makePager(stage, content, opts) {
     place(-n * stage.clientWidth, PAGE_MS);
     setTimeout(function () { busy = false; clear(); done(); }, PAGE_MS + 20);
   }
-  stage.addEventListener("pointerdown", function (e) {
+  hit.addEventListener("pointerdown", function (e) {
     if (busy || (e.pointerType === "mouse" && e.button !== 0)) return;
     if (opts.canStart && !opts.canStart(e)) return;
     g = { x: e.clientX, y: e.clientY, dx: 0, lock: null, id: e.pointerId };
@@ -1333,7 +1348,7 @@ function makePager(stage, content, opts) {
   document.addEventListener("pointerup", up);
   document.addEventListener("pointercancel", up);
   // めくった直後の「押した」を捨てる（押した場所の行・日が反応しないように）
-  stage.addEventListener("click", function (e) {
+  hit.addEventListener("click", function (e) {
     if (Date.now() - swipedAt < 400) { e.stopPropagation(); e.preventDefault(); }
   }, true);
   return { slide: slide };
@@ -1347,7 +1362,8 @@ function setupPagers() {
     alongside: function (n) { listPager.slide(n, groupsHtml(addDays(V.day, 7 * n)), function () {}); },
     commit: function (n) { V.day = addDays(V.day, 7 * n); render(); }
   });
-  listPager = makePager(el("groupsStage"), el("groups"), {
+  listPager = makePager(el("groupsStage"), el("dayGroups"), {
+    hit: el("groups"),
     canStart: function (e) { return !e.target.closest("input,textarea,select"); },
     html: function (n) { return groupsHtml(addDays(V.day, n)); },
     alongside: function (n) {
@@ -1678,6 +1694,7 @@ function start() {
   el("calPrev").addEventListener("click", function () { stepMonth(-1); });
   el("calNext").addEventListener("click", function () { stepMonth(1); });
   setupPagers();
+  window.addEventListener("resize", function () { if (V.tab === "list") fitListHeight(); });
   el("calGrid").addEventListener("click", function (e) {
     var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); V.tab = "list"; render(); }
   });
