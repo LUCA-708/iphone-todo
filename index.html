@@ -45,7 +45,11 @@ input,select,textarea{font:inherit;color:var(--ink)}
 /* B 週の日付 */
 #strip{display:flex;align-items:center;padding:2px 4px 8px;border-bottom:1px solid var(--line);touch-action:pan-y}
 #strip .arr{width:26px;height:44px;color:var(--muted);font-size:18px}
-#days{flex:1;display:flex;justify-content:space-between}
+#daysStage{flex:1}
+.days{display:flex;justify-content:space-between}
+/* めくり：外枠は横のはみ出しだけ隠す（縦はそのまま）・隣の2枚は外枠の中に重ねて置く */
+.pgstage{position:relative;overflow-x:hidden;overflow-x:clip;touch-action:pan-y}
+.pgpane{position:absolute;top:0;left:0;width:100%;box-sizing:border-box;pointer-events:none}
 .d{width:13.5%;text-align:center;font-size:11px;color:var(--muted);border-radius:12px;padding:4px 0 3px}
 .d b{display:block;font-size:17px;color:var(--ink);font-weight:600}
 .d i{display:block;font-style:normal;font-size:11px;color:var(--warn);height:14px;font-weight:bold}
@@ -120,7 +124,7 @@ input,select,textarea{font:inherit;color:var(--ink)}
 /* 月のカレンダー */
 #calHead{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 8px;font-weight:bold;font-size:17px}
 #calHead button{width:44px;height:36px;font-size:18px;color:var(--ink2)}
-#calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:0 8px}
+.calgrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:0 8px}
 .cw{text-align:center;font-size:12px;color:var(--muted);padding:4px 0}
 .cc{background:var(--card);border-radius:8px;min-height:56px;padding:4px 2px;text-align:center;font-size:14px;border:1px solid transparent}
 .cc.other{opacity:.38}
@@ -186,7 +190,7 @@ input,select,textarea{font:inherit;color:var(--ink)}
 <section id="listView">
   <div id="strip">
     <button class="arr" id="wkPrev" aria-label="前の週">‹</button>
-    <div id="days"></div>
+    <div id="daysStage" class="pgstage"><div id="days" class="days"></div></div>
     <button class="arr" id="wkNext" aria-label="次の週">›</button>
   </div>
   <div id="nag" class="bar warn hide"></div>
@@ -197,12 +201,12 @@ input,select,textarea{font:inherit;color:var(--ink)}
     <button type="submit" id="addGo" aria-label="入れる">＋</button>
   </form>
   <div id="addMsg"></div>
-  <div id="groups"></div>
+  <div id="groupsStage" class="pgstage"><div id="groups" class="groups"></div></div>
 </section>
 
 <section id="calView" class="hide">
   <div id="calHead"><button id="calPrev">‹</button><span id="calTitle"></span><button id="calNext">›</button></div>
-  <div id="calGrid"></div>
+  <div id="calStage" class="pgstage"><div id="calGrid" class="calgrid"></div></div>
   <div id="calNote">数字＝その日の残り件数・⭐＝重要がある日。押すとその日の一覧へ。</div>
 </section>
 
@@ -732,15 +736,19 @@ function render() {
 }
 
 // ── 一覧 ─────────────────────────────────────
-function renderList() {
+// B 週の日付（sel を含む週・sel に印）。めくるときに隣の週も描くので文字列で返す
+function weekHtml(sel) {
   var td = today();
-  // B 週の日付
-  el("days").innerHTML = weekDays(V.day, S.prefs.weekStart).map(function (day) {
+  return weekDays(sel, S.prefs.weekStart).map(function (day) {
     var info = dayInfo(S.tasks, day);
-    return '<button class="d' + (day === V.day ? " on" : "") + (day === td ? " today" : "") + '" data-day="' + day + '">'
+    return '<button class="d' + (day === sel ? " on" : "") + (day === td ? " today" : "") + '" data-day="' + day + '">'
       + WEEKDAY_JP[weekdayOf(day)] + "<b>" + toDate(day).getDate() + "</b><i>"
       + (info.imp ? "⭐" : "") + (info.n ? info.n : "") + "</i></button>";
   }).join("");
+}
+function renderList() {
+  var td = today();
+  el("days").innerHTML = weekHtml(V.day);
 
   // 控えの一言
   var nag = backupNag(S.prefs.lastBackup, S.tasks.length, td);
@@ -758,7 +766,13 @@ function renderList() {
     ? "やることを入れる（@明日 #仕事 !高 も書ける）"
     : shortDate(V.day) + " に入れる（@ で別の日も）";
 
-  var g = groupTasks(S.tasks, V.day, td, V.cat);
+  el("groups").innerHTML = groupsHtml(V.day);
+  renderSelCount();
+}
+// 一覧（day の日を見ているときの中身）。めくるときに前日・翌日も描くので文字列で返す
+function groupsHtml(day) {
+  var td = today();
+  var g = groupTasks(S.tasks, day, td, V.cat);
   var h = [];
 
   // Q ⭐ 重要（日付に関係なく全部）
@@ -766,7 +780,11 @@ function renderList() {
     var many = g.imp.length > IMP_FOLD_OVER;
     h.push('<div class="gh imphead"><span>⭐ 重要 ' + g.imp.length + "件</span>"
       + (many ? '<button class="gbtn" data-act="impFold">' + (V.impOpen ? "畳む" : "すべて見る") + "</button>" : "") + "</div>");
-    if (!many || V.impOpen) g.imp.forEach(function (t) { h.push(rowHtml(t, { grp: "imp", showDue: true })); });
+    if (!many || V.impOpen) {
+      h.push('<div data-drop="imp">');      // 並べ替えの入れ物（同じ期限の行どうしだけ動かせる）
+      g.imp.forEach(function (t) { h.push(rowHtml(t, { grp: "imp", showDue: true })); });
+      h.push("</div>");
+    }
   }
   // ⚠ 期限切れ（今日を見ているときだけ）
   if (g.overdue.length) {
@@ -775,7 +793,7 @@ function renderList() {
     g.overdue.forEach(function (t) { h.push(rowHtml(t, { grp: "overdue", showDue: true })); });
   }
   // その日
-  h.push('<div class="gh"><span>' + (V.day === td ? "今日" : shortDate(V.day)) + " " + g.day.length + "件</span></div>");
+  h.push('<div class="gh"><span>' + (day === td ? "今日" : shortDate(day)) + " " + g.day.length + "件</span></div>");
   h.push('<div data-drop="day">');
   if (g.day.length) g.day.forEach(function (t) { h.push(rowHtml(t, { grp: "day" })); });
   else h.push('<div class="empty">この日のやることはありません。<br>上の欄に打って ＋ で入れられます。</div>');
@@ -792,11 +810,10 @@ function renderList() {
   // E 完了
   if (g.done.length) {
     h.push('<div class="gh fold" data-act="doneFold"><span>' + (V.doneOpen ? "▼" : "▶") + " "
-      + (V.day === td ? "今日" : shortDate(V.day) + " に") + " 完了した " + g.done.length + "件</span></div>");
+      + (day === td ? "今日" : shortDate(day) + " に") + " 完了した " + g.done.length + "件</span></div>");
     if (V.doneOpen) g.done.forEach(function (t) { h.push(rowHtml(t, { grp: "done" })); });
   }
-  el("groups").innerHTML = h.join("");
-  renderSelCount();
+  return h.join("");
 }
 
 function rowHtml(t, o) {
@@ -949,15 +966,18 @@ function onListClick(e) {
   openSheet(tt.id);
 }
 
-// ── 長押しで並べ替え（その日・期限なしの中だけ）─────────────
+// ── 長押しで並べ替え（その日・期限なし・⭐重要の中だけ）─────────────
+// ⭐重要は期限の近い順に並ぶ＝**同じ期限の行どうしだけ**入れ替えられる（日付をまたぐと次の描画で戻るため・2026-09-27 ユーザー決定 B）
 var drag = null, dragJustEnded = false;
 function onPointerDown(e) {
   var row = e.target.closest(".row");
   if (!row || V.selecting || e.target.closest("[data-act]")) return;
   var grp = row.getAttribute("data-grp");
-  if (grp !== "day" && grp !== "undated") return;
+  if (grp !== "day" && grp !== "undated" && grp !== "imp") return;
+  var own = taskById(row.getAttribute("data-id"));
+  if (!own) return;
   var startY = e.clientY, startX = e.clientX;
-  drag = { row: row, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
+  drag = { row: row, grp: grp, due: own.due, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
     if (!drag) return;
     drag.active = true;
     row.classList.add("dragging");
@@ -972,20 +992,30 @@ function onPointerMove(e) {
   }
   e.preventDefault();
   var box = drag.row.parentNode;
-  var rows = Array.prototype.filter.call(box.children, function (c) { return c.classList.contains("row") && c !== drag.row; });
+  var rows = laneRows(box).filter(function (c) { return c !== drag.row; });
+  if (!rows.length) return;
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i].getBoundingClientRect();
     if (e.clientY < r.top + r.height / 2) { box.insertBefore(drag.row, rows[i]); return; }
   }
-  box.appendChild(drag.row);
+  // 最後の行の後ろへ（⭐重要は同じ期限の最後＝次の期限の行より前に留める）
+  box.insertBefore(drag.row, rows[rows.length - 1].nextSibling);
+}
+/** 動かしている行と一緒に並べ替える行（⭐重要なら同じ期限のものだけ）。同じ期限の行は並びの中で連続している */
+function laneRows(box) {
+  return Array.prototype.filter.call(box.children, function (c) {
+    if (!c.classList.contains("row")) return false;
+    if (drag.grp !== "imp") return true;
+    var t = taskById(c.getAttribute("data-id"));
+    return !!t && t.due === drag.due;
+  });
 }
 function onPointerUp() {
   if (!drag) return;
   clearTimeout(drag.timer);
   if (drag.active) {
     var box = drag.row.parentNode;
-    var ids = Array.prototype.filter.call(box.children, function (c) { return c.classList.contains("row"); })
-      .map(function (c) { return c.getAttribute("data-id"); });
+    var ids = laneRows(box).map(function (c) { return c.getAttribute("data-id"); });
     ids.forEach(function (id, i) { var t = taskById(id); if (t) { t.order = (i + 1) * 10; touch(t); } });
     saveAll();
     dragJustEnded = true;
@@ -1191,22 +1221,155 @@ function onSheetClick(e) {
 function renderCal() {
   if (!V.calY) { var d = toDate(V.day); V.calY = d.getFullYear(); V.calM = d.getMonth() + 1; }
   el("calTitle").textContent = V.calY + "年" + V.calM + "月";
+  el("calGrid").innerHTML = calHtml(V.calY, V.calM);
+}
+// y年m月のマス。めくるときに前後の月も描くので文字列で返す
+function calHtml(y, m) {
   var td = today();
   var head = weekDays("2026-09-21", S.prefs.weekStart).map(function (day) { return '<div class="cw">' + WEEKDAY_JP[weekdayOf(day)] + "</div>"; });
-  var cells = monthCells(V.calY, V.calM, S.prefs.weekStart).map(function (day) {
+  var cells = monthCells(y, m, S.prefs.weekStart).map(function (day) {
     var info = dayInfo(S.tasks, day);
-    var other = toDate(day).getMonth() + 1 !== V.calM;
+    var other = toDate(day).getMonth() + 1 !== m;
     return '<button class="cc' + (other ? " other" : "") + (day === td ? " today" : "") + (day === V.day ? " on" : "")
       + '" data-day="' + day + '">' + toDate(day).getDate()
       + "<em>" + (info.imp ? "⭐" : "") + (info.n ? info.n + "件" : "") + "</em></button>";
   });
-  el("calGrid").innerHTML = head.concat(cells).join("");
+  return head.concat(cells).join("");
+}
+/** y年m月から n か月動かした [年, 月] */
+function addMonth(y, m, n) {
+  m += n;
+  while (m < 1) { m += 12; y -= 1; }
+  while (m > 12) { m -= 12; y += 1; }
+  return [y, m];
 }
 function shiftMonth(n) {
-  V.calM += n;
-  if (V.calM < 1) { V.calM = 12; V.calY -= 1; }
-  if (V.calM > 12) { V.calM = 1; V.calY += 1; }
+  var t = addMonth(V.calY, V.calM, n);
+  V.calY = t[0]; V.calM = t[1];
   renderCal();
+}
+
+// ── 指についてくるめくり（週の帯・カレンダー・一覧で共通）─────────────
+// stage＝外枠（はみ出しを隠す）／content＝本物の中身。横に動かすと隣の2枚（opts.html(-1/+1)）を左右に置いて一緒に動かし、
+// 離したとき十分動いていれば滑らせて opts.commit(n)、足りなければ元へ戻す。縦の動きは今までどおりスクロールに任せる。
+// 🔴 iPhone 本体の「視差効果を減らす」がオンなら、指について来ずに離した時点で切り替えるだけ
+var REDUCE_MOTION = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+var PAGE_MS = 220, BACK_MS = 180;
+var swipedAt = 0;          // めくった時刻＝直後の「押した」を1回捨てる（行の詳細が開く・日が選ばれるのを防ぐ）
+function makePager(stage, content, opts) {
+  var g = null, busy = false, panes = [];
+  function place(dx, ms) {
+    var list = [panes[0], content, panes[1]];
+    list.forEach(function (p, i) {
+      if (!p) return;
+      p.style.transition = ms ? "transform " + ms + "ms ease-out" : "none";
+      p.style.transform = "translateX(calc(" + ((i - 1) * 100) + "% + " + dx + "px))";
+    });
+  }
+  function build(prevHtml, nextHtml) {
+    clear();
+    [prevHtml, nextHtml].forEach(function (html, i) {
+      var p = document.createElement("div");
+      p.className = content.className + " pgpane";
+      p.setAttribute("aria-hidden", "true");
+      p.innerHTML = html == null ? "" : html;
+      stage.appendChild(p);
+      panes[i] = p;
+    });
+  }
+  function clear() {
+    panes.forEach(function (p) { if (p && p.parentNode) p.parentNode.removeChild(p); });
+    panes = [];
+    content.style.transition = "none";
+    content.style.transform = "";
+  }
+  /** 指なしで n の向きへ滑らせる（‹ › ボタン・連動用）。html＝入ってくる側の中身。done は滑り終わってから */
+  function slide(n, html, done) {
+    if (busy) return;
+    if (REDUCE_MOTION) { done(); return; }
+    busy = true;
+    build(n < 0 ? html : null, n > 0 ? html : null);
+    place(0, 0);
+    stage.offsetWidth;               // 置いた位置を確定させてから動かす（しないと滑らずに飛ぶ）
+    place(-n * stage.clientWidth, PAGE_MS);
+    setTimeout(function () { busy = false; clear(); done(); }, PAGE_MS + 20);
+  }
+  stage.addEventListener("pointerdown", function (e) {
+    if (busy || (e.pointerType === "mouse" && e.button !== 0)) return;
+    if (opts.canStart && !opts.canStart(e)) return;
+    g = { x: e.clientX, y: e.clientY, dx: 0, lock: null, id: e.pointerId };
+  });
+  document.addEventListener("pointermove", function (e) {
+    if (!g || e.pointerId !== g.id) return;
+    if (drag && drag.active) { if (g.lock === "x") place(0, BACK_MS); g = null; return; }   // 長押しの並べ替えが先
+    var dx = e.clientX - g.x, dy = e.clientY - g.y;
+    if (g.lock === null && (Math.abs(dx) > 8 || Math.abs(dy) > 8)) {
+      g.lock = Math.abs(dx) > Math.abs(dy) ? "x" : "y";
+      if (g.lock === "y") { g = null; return; }
+      if (!REDUCE_MOTION) build(opts.html(-1), opts.html(1));
+    }
+    if (g.lock !== "x") return;
+    g.dx = dx;
+    if (!REDUCE_MOTION) place(dx, 0);
+  });
+  function up(e) {
+    if (!g || e.pointerId !== g.id) return;
+    var st = g; g = null;
+    if (st.lock !== "x") return;
+    swipedAt = Date.now();
+    var w = stage.clientWidth, n = st.dx < 0 ? 1 : -1;
+    if (Math.abs(st.dx) < Math.min(60, w * 0.2) || e.type === "pointercancel") {
+      if (REDUCE_MOTION) return;
+      busy = true; place(0, BACK_MS);
+      setTimeout(function () { busy = false; clear(); }, BACK_MS + 20);
+      return;
+    }
+    if (REDUCE_MOTION) { opts.commit(n); return; }
+    busy = true;
+    place(-n * w, PAGE_MS);
+    if (opts.alongside) opts.alongside(n);
+    setTimeout(function () { busy = false; clear(); opts.commit(n); }, PAGE_MS + 20);
+  }
+  document.addEventListener("pointerup", up);
+  document.addEventListener("pointercancel", up);
+  // めくった直後の「押した」を捨てる（押した場所の行・日が反応しないように）
+  stage.addEventListener("click", function (e) {
+    if (Date.now() - swipedAt < 400) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
+  return { slide: slide };
+}
+var stripPager = null, listPager = null, calPager = null;
+/** 選んでいる日を n 日動かす。週をまたぐなら週の帯も同じ向きに滑らせる（またがなければ印が移るだけ） */
+function weekOf(day) { return weekDays(day, S.prefs.weekStart)[0]; }
+function setupPagers() {
+  stripPager = makePager(el("daysStage"), el("days"), {
+    html: function (n) { return weekHtml(addDays(V.day, 7 * n)); },
+    alongside: function (n) { listPager.slide(n, groupsHtml(addDays(V.day, 7 * n)), function () {}); },
+    commit: function (n) { V.day = addDays(V.day, 7 * n); render(); }
+  });
+  listPager = makePager(el("groupsStage"), el("groups"), {
+    canStart: function (e) { return !e.target.closest("input,textarea,select"); },
+    html: function (n) { return groupsHtml(addDays(V.day, n)); },
+    alongside: function (n) {
+      var to = addDays(V.day, n);
+      if (weekOf(to) !== weekOf(V.day)) stripPager.slide(n > 0 ? 1 : -1, weekHtml(to), function () {});
+    },
+    commit: function (n) { V.day = addDays(V.day, n); render(); }
+  });
+  calPager = makePager(el("calStage"), el("calGrid"), {
+    html: function (n) { var t = addMonth(V.calY, V.calM, n); return calHtml(t[0], t[1]); },
+    commit: function (n) { shiftMonth(n); }
+  });
+}
+/** ‹ › ボタン：週の帯と一覧を一緒に滑らせてから切り替える */
+function stepWeek(n) {
+  var to = addDays(V.day, 7 * n);
+  listPager.slide(n, groupsHtml(to), function () {});
+  stripPager.slide(n, weekHtml(to), function () { V.day = to; render(); });
+}
+function stepMonth(n) {
+  var t = addMonth(V.calY, V.calM, n);
+  calPager.slide(n, calHtml(t[0], t[1]), function () { shiftMonth(n); });
 }
 
 // ── 設定 ─────────────────────────────────────
@@ -1468,16 +1631,6 @@ function setupOffline() {
   });
 }
 
-// ── 週の帯を指で左右にめくる ─────────────────────────
-var swipeX = null;
-function onStripTouchStart(e) { swipeX = e.touches[0].clientX; }
-function onStripTouchEnd(e) {
-  if (swipeX === null) return;
-  var dx = e.changedTouches[0].clientX - swipeX;
-  swipeX = null;
-  if (Math.abs(dx) > 50) { V.day = addDays(V.day, dx < 0 ? 7 : -7); render(); }
-}
-
 // ── 始める ───────────────────────────────────
 function start() {
   loadAll();
@@ -1497,10 +1650,8 @@ function start() {
   el("days").addEventListener("click", function (e) {
     var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); render(); }
   });
-  el("strip").addEventListener("touchstart", onStripTouchStart, { passive: true });
-  el("strip").addEventListener("touchend", onStripTouchEnd);
-  el("wkPrev").addEventListener("click", function () { V.day = addDays(V.day, -7); render(); });
-  el("wkNext").addEventListener("click", function () { V.day = addDays(V.day, 7); render(); });
+  el("wkPrev").addEventListener("click", function () { stepWeek(-1); });
+  el("wkNext").addEventListener("click", function () { stepWeek(1); });
   el("filt").addEventListener("click", function (e) {
     var b = e.target.closest("[data-cat]"); if (b) { V.cat = b.getAttribute("data-cat"); render(); }
   });
@@ -1524,8 +1675,9 @@ function start() {
     pendingImport = null;
     render();
   });
-  el("calPrev").addEventListener("click", function () { shiftMonth(-1); });
-  el("calNext").addEventListener("click", function () { shiftMonth(1); });
+  el("calPrev").addEventListener("click", function () { stepMonth(-1); });
+  el("calNext").addEventListener("click", function () { stepMonth(1); });
+  setupPagers();
   el("calGrid").addEventListener("click", function (e) {
     var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); V.tab = "list"; render(); }
   });
