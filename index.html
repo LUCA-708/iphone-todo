@@ -1463,12 +1463,6 @@ function renderSettings() {
   else h.push('<div class="srow"><button class="btn" data-set="addCat">＋ 種類を足す</button></div>');
   h.push("</div>" + msgHtml(setMsg.cat));
 
-  // 送り先
-  h.push('<div class="sh">送り先（Discord のウェブフック）</div><div class="sbox">');
-  h.push(hookRowHtml("hookTask", "Task Desk へ（#タスク）"));
-  h.push(hookRowHtml("hookBackup", "控えを送る（#タスク控え）"));
-  h.push("</div>" + msgHtml(setMsg.hook));
-
   // 控え
   var lb = S.prefs.lastBackup;
   h.push('<div class="sh">控え（データはこの iPhone の中だけにあります）</div><div class="sbox">');
@@ -1487,6 +1481,12 @@ function renderSettings() {
   h.push('<div class="srow"><span class="k">アイコンに数字を出す<br><small style="color:var(--muted)">今日＋期限切れの残り。開いたときに数え直します</small></span><button class="tog'
     + (S.prefs.badge ? " on" : "") + '" data-set="badge"></button></div>');
   h.push("</div>" + msgHtml(setMsg.badge));
+
+  // 送り先（最初に1回貼れば触らない＝いちばん下・2026-09-27 ユーザー指定）
+  h.push('<div class="sh">送り先（Discord のウェブフック）</div><div class="sbox">');
+  h.push(hookRowHtml("hookTask", "Task Desk へ（#タスク）"));
+  h.push(hookRowHtml("hookBackup", "控えを送る（#タスク控え）"));
+  h.push("</div>" + msgHtml(setMsg.hook));
 
   h.push('<div class="foot"><span id="offMsg"></span><br>繰り返し・小項目・メモは iPhone の中だけで使います（Task Desk へは送られません）。</div>');
   el("setView").innerHTML = h.join("");
@@ -1590,7 +1590,7 @@ function markBackedUp(text) {
 }
 function sendBackup(btn) {
   var url = S.prefs.hookBackup;
-  if (!looksLikeWebhook(url)) { setMsg.backup = "⚠️ 先に上の「控えを送る（#タスク控え）」の送り先を貼ってください。"; renderSettings(); return; }
+  if (!looksLikeWebhook(url)) { setMsg.backup = "⚠️ 先にいちばん下の「控えを送る（#タスク控え）」に送り先を貼ってください。"; renderSettings(); return; }
   var fd = new FormData();
   fd.append("payload_json", JSON.stringify({ content: "📱 タスクの控え（" + S.tasks.length + "件）" }));
   fd.append("files[0]", new Blob([backupText()], { type: "application/json" }), backupName());
