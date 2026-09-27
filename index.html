@@ -27,12 +27,15 @@
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;background:var(--bg);color:var(--ink)}
+/* 🔴 すばやく2回押したときの拡大を止める（スクロール・ピンチは残す）＝☆・↑↓を続けて押すと画面が拡大されて戻らなかった（2026-09-27） */
+html{touch-action:manipulation}
 body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Meiryo",sans-serif;font-size:16px;
      -webkit-text-size-adjust:100%;max-width:520px;margin:0 auto;
      /* 🔴 下の切り替えの帯の分＋ホームバーの分を空ける */
      padding:env(safe-area-inset-top) 0 calc(64px + env(safe-area-inset-bottom))}
 button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
-input,select,textarea{font:inherit;color:var(--ink)}
+/* 🔴 入力欄は16px以上＝iPhone は16px未満の入力欄を押すと勝手に拡大して戻らない（2026-09-27） */
+input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .hide{display:none!important}
 
 /* A 日付の見出し */
@@ -182,8 +185,10 @@ body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
 .btn.fill{background:var(--acc);color:#fff}
 .btn.ng{border-color:var(--ng);color:var(--ng)}
 .btn.armed{background:var(--ng);color:#fff;border-color:var(--ng)}
+.btn.mv{padding:7px 10px;margin-right:2px}
+.btn:disabled{opacity:.3}
 .btn:disabled{opacity:.45}
-.sin{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff}
+.sin{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;background:#fff}
 .smsg{padding:6px 14px 0;font-size:13px;line-height:1.5;color:var(--acc)}
 .smsg.ng{color:var(--ng);font-weight:bold}
 .catedit{padding:10px 14px;border-bottom:1px solid var(--line);background:#FBFAF6}
@@ -200,7 +205,7 @@ body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
 #sheet{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;max-height:88vh;overflow-y:auto;background:var(--bg);border-radius:16px 16px 0 0;z-index:31;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
 #sheet .top{position:sticky;top:0;display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--bg);border-bottom:1px solid var(--line);z-index:2}
 #sheet .top b{flex:1;font-size:16px}
-#sheet textarea{width:100%;min-height:72px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;resize:vertical}
+#sheet textarea{width:100%;min-height:72px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:16px;resize:vertical}
 .subrow{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--card)}
 .subrow .chk{width:22px;height:22px}
 .subrow .chk.done:after{left:3px;top:-2px;font-size:14px}
@@ -613,6 +618,16 @@ function catCounts(tasks, cats, today) {
   });
   return c;
 }
+/** 種類の並びを1つ動かす（dir＝-1 上へ／+1 下へ）。端より先へは動かさない。動かしたら true。
+ *  並びは一覧の種類の帯・種類タブ・種類を変える・詳細の選択のすべてに効く（S.cats の順がそのまま使われる） */
+function moveCat(cats, id, dir) {
+  var i = -1;
+  cats.forEach(function (c, k) { if (c.id === id) i = k; });
+  var j = i + dir;
+  if (i < 0 || j < 0 || j >= cats.length) return false;
+  var x = cats[i]; cats[i] = cats[j]; cats[j] = x;
+  return true;
+}
 /** 完了を取り消す（1件ずつの ↩ とまとめての「未完了に戻す」の共通部分）。
  *  繰り返しで作った次の回は、まだ誰も触っていなければ消す（二重にしない）。残ったタスクの配列を返す */
 function uncompleteTask(tasks, t, iso) {
@@ -674,8 +689,11 @@ function sendable(tasks, ids) {
   tasks.forEach(function (t) { if (!ids[t.id]) return; if (t.sentAt || t.done) skipped += 1; else q.push(t); });
   return { queue: q, skipped: skipped };
 }
-function pruneDone(tasks, today) {
+function pruneDone(tasks, today, cats) {
+  var keep = {};
+  (cats || []).forEach(function (c) { if (c.keep) keep[c.id] = true; });   // 種類ごとの「完了を自動で片付けない」（2026-09-27）
   return tasks.filter(function (t) {
+    if (t.cat && keep[t.cat]) return true;
     return !(t.done && t.doneAt && daysBetween(ymd(new Date(t.doneAt)), today) >= PRUNE_DAYS);
   });
 }
@@ -1444,7 +1462,8 @@ function catListHtml(cat) {
   group(" late", "⚠ 期限切れ", v.overdue);
   group("", "日付あり（近い順）", v.dated);
   group("", "📌 期限なし", v.undated, { quick: true });
-  group("", "✔ 完了（新しい順・30日で自動で片付く）", v.done);
+  var ck = findCat(S.cats, cat);
+  group("", ck && ck.keep ? "✔ 完了（新しい順・自動で片付けない）" : "✔ 完了（新しい順・" + PRUNE_DAYS + "日で自動で片付く）", v.done);
   if (!h.length) {
     h.push('<div class="empty">' + (V.catMode === "done" ? "完了したものはありません。" : "この種類のやることはありません。<br>上の欄に打って ＋ で入れられます。") + "</div>");
   }
@@ -1766,10 +1785,13 @@ function renderSettings() {
   var h = [];
   // 種類
   h.push('<div class="sh">種類（Task Desk のカテゴリと同じ名前にすると、送るだけで振り分けられます）</div><div class="sbox">');
-  S.cats.forEach(function (c) {
+  S.cats.forEach(function (c, i) {
     if (V.editCat === c.id) h.push(catEditHtml(c));
     else h.push('<div class="srow"><span class="dot" style="background:' + c.color + '"></span><span class="k">' + esc(c.name)
-      + '</span><button class="btn" data-set="editCat" data-id="' + esc(c.id) + '">✏ 直す</button></div>');
+      + (c.keep ? '<br><small style="color:var(--muted)">完了を自動で片付けない</small>' : "") + "</span>"
+      + '<button class="btn mv" data-set="catUp" data-id="' + esc(c.id) + '" aria-label="上へ"' + (i === 0 ? " disabled" : "") + ">↑</button>"
+      + '<button class="btn mv" data-set="catDown" data-id="' + esc(c.id) + '" aria-label="下へ"' + (i === S.cats.length - 1 ? " disabled" : "") + ">↓</button>"
+      + '<button class="btn" data-set="editCat" data-id="' + esc(c.id) + '">✏ 直す</button></div>');
   });
   if (V.editCat === "new") h.push(catEditHtml({ id: "new", name: "", color: CAT_COLORS[S.cats.length % CAT_COLORS.length] }));
   else h.push('<div class="srow"><button class="btn" data-set="addCat">＋ 種類を足す</button></div>');
@@ -1809,6 +1831,8 @@ function catEditHtml(c) {
     + '<div class="swatches">' + CAT_COLORS.map(function (col) {
       return '<button class="sw' + (col === c.color ? " on" : "") + '" data-set="catColor" data-color="' + col + '" style="background:' + col + '"></button>';
     }).join("") + "</div>"
+    + '<div class="srow" style="padding:10px 2px;border:0"><span class="k">完了を自動で片付けない<br><small style="color:var(--muted)">月1の買い出しなど、完了→未完了をくり返す種類向け。オフなら完了から' + PRUNE_DAYS + '日で消えます</small></span>'
+    + '<button class="tog' + ((editKeep !== null ? editKeep : !!c.keep) ? " on" : "") + '" data-set="catKeep" aria-label="完了を自動で片付けない"></button></div>'
     + '<div style="display:flex;gap:8px"><button class="btn fill" data-set="catSave">保存</button><button class="btn" data-set="catCancel">やめる</button>'
     + (c.id !== "new" ? '<span style="flex:1"></span><button class="btn ng" data-set="catDel">🗑 消す</button>' : "") + "</div></div>";
 }
@@ -1820,13 +1844,24 @@ function hookRowHtml(key, label) {
     + (set ? '<button class="btn ng" data-set="hookClear" data-key="' + key + '">消す</button>' : "") + "</div></div>";
 }
 var editColor = null;
+var editKeep = null;       // 直している種類の「完了を自動で片付けない」（null＝まだ触っていない＝今の値のまま）
 function onSetClick(e) {
   var b = e.target.closest("[data-set]");
   if (!b) return;
   var k = b.getAttribute("data-set");
-  if (k === "editCat") { V.editCat = b.getAttribute("data-id"); editColor = null; setMsg.cat = ""; renderSettings(); return; }
-  if (k === "addCat") { V.editCat = "new"; editColor = null; setMsg.cat = ""; renderSettings(); return; }
+  if (k === "catUp" || k === "catDown") {       // 種類の並び替え（2026-09-27 ユーザー決定＝↑↓ボタン）
+    if (moveCat(S.cats, b.getAttribute("data-id"), k === "catUp" ? -1 : 1)) { setMsg.cat = ""; saveAll(); renderSettings(); }
+    return;
+  }
+  if (k === "editCat") { V.editCat = b.getAttribute("data-id"); editColor = null; editKeep = null; setMsg.cat = ""; renderSettings(); return; }
+  if (k === "addCat") { V.editCat = "new"; editColor = null; editKeep = null; setMsg.cat = ""; renderSettings(); return; }
   if (k === "catCancel") { V.editCat = null; renderSettings(); return; }
+  if (k === "catKeep") {          // 画面だけ切り替える（保存で決まる）＝打ちかけの名前は消さない
+    var cur = findCat(S.cats, V.editCat);
+    editKeep = !(editKeep !== null ? editKeep : !!(cur && cur.keep));
+    b.classList.toggle("on", editKeep);
+    return;
+  }
   if (k === "catColor") {
     editColor = b.getAttribute("data-color");
     Array.prototype.forEach.call(document.querySelectorAll(".sw"), function (s) { s.classList.toggle("on", s === b); });
@@ -1838,11 +1873,12 @@ function onSetClick(e) {
     var why = catNameProblem(name, S.cats, selfId);
     if (why) { setMsg.cat = "⚠️ " + why; renderSettingsKeepEdit(name); return; }
     if (V.editCat === "new") {
-      S.cats.push({ id: "c" + Date.now().toString(36), name: name, color: editColor || CAT_COLORS[S.cats.length % CAT_COLORS.length] });
+      S.cats.push({ id: "c" + Date.now().toString(36), name: name, color: editColor || CAT_COLORS[S.cats.length % CAT_COLORS.length], keep: !!editKeep });
     } else {
       var c = findCat(S.cats, V.editCat);
       c.name = name;
       if (editColor) c.color = editColor;
+      if (editKeep !== null) c.keep = editKeep;
     }
     V.editCat = null;
     setMsg.cat = "✔ 保存しました。Task Desk 側のカテゴリ名と同じか確かめてください（違うと未分類で届きます）。";
@@ -2023,7 +2059,7 @@ function setupOffline() {
 function start() {
   loadAll();
   V.catView = typeof S.prefs.catView === "string" ? S.prefs.catView : "";   // 種類タブは前回見ていた種類から（16）
-  var kept = pruneDone(S.tasks, today());           // 完了から PRUNE_DAYS 日たったものを片付ける
+  var kept = pruneDone(S.tasks, today(), S.cats);           // 完了から PRUNE_DAYS 日たったものを片付ける
   if (kept.length !== S.tasks.length) { S.tasks = kept; saveAll(); }
   V.day = today();
 
