@@ -1,0 +1,1567 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="タスク">
+<meta name="theme-color" content="#F7F6F2">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./icon-180.png">
+<title>タスク</title>
+<!--
+  📱 タスク（iPhone のやること帳・1枚もの）
+
+  🔴 外から読み込むものは一切入れない（電波が無い所でも開くため）。
+  🔴 このファイルを直したら sw.js の版番号（CACHE = "todo-vN"）を1つ上げること。
+  中身の計算は下の LOGIC 部分。tests/test_iphone_todo.py が Task Desk の本物と突き合わせている。
+  仕様＝C:\Claude_code\plans\iphone_todo_spec.md ／ 見本＝C:\Claude_code\plans\todo_pwa_mock_v5.html
+  配色＝Task Desk（task_desk/ui/style.py）と同じ値。
+-->
+<style>
+:root{
+  --bg:#F7F6F2; --bg2:#F1EFE8; --card:#FFFFFF; --ink:#2C2C2A; --ink2:#5F5E5A; --muted:#888780;
+  --line:#E4E1D8; --acc:#2F6F4F; --acc-soft:#E3EFE7; --ng:#C0392B; --ng-soft:#FBE7E4;
+  --warn:#C97A19; --warn-soft:#FBEEDC; --star:#E0A21E; --ok:#27500A;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Meiryo",sans-serif;font-size:16px;
+     -webkit-text-size-adjust:100%;max-width:520px;margin:0 auto;
+     /* 🔴 下の切り替えの帯の分＋ホームバーの分を空ける */
+     padding:env(safe-area-inset-top) 0 calc(64px + env(safe-area-inset-bottom))}
+button{font:inherit;color:inherit;background:none;border:0;padding:0;cursor:pointer}
+input,select,textarea{font:inherit;color:var(--ink)}
+.hide{display:none!important}
+
+/* A 日付の見出し */
+#hdr{display:flex;align-items:center;gap:8px;padding:12px 14px 6px}
+#hdrTitle{flex:1;font-size:19px;font-weight:bold}
+#hdrTitle small{font-size:12px;font-weight:bold;color:#fff;background:var(--acc);border-radius:10px;padding:1px 8px;margin-left:6px;vertical-align:middle}
+.hbtn{border:1px solid var(--line);background:var(--card);border-radius:10px;padding:6px 10px;font-size:14px}
+.hbtn.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+
+/* B 週の日付 */
+#strip{display:flex;align-items:center;padding:2px 4px 8px;border-bottom:1px solid var(--line);touch-action:pan-y}
+#strip .arr{width:26px;height:44px;color:var(--muted);font-size:18px}
+#days{flex:1;display:flex;justify-content:space-between}
+.d{width:13.5%;text-align:center;font-size:11px;color:var(--muted);border-radius:12px;padding:4px 0 3px}
+.d b{display:block;font-size:17px;color:var(--ink);font-weight:600}
+.d i{display:block;font-style:normal;font-size:11px;color:var(--warn);height:14px;font-weight:bold}
+.d.today b{color:var(--acc)}
+.d.on{background:var(--acc);color:#fff}.d.on b,.d.on i{color:#fff}
+
+/* 知らせの帯 */
+.bar{margin:8px 12px 0;border-radius:10px;padding:8px 12px;font-size:13px;line-height:1.5}
+.bar.warn{background:var(--warn-soft);color:#7a4a07}
+.bar.ng{background:var(--ng-soft);color:var(--ng);font-weight:bold}
+
+/* N 種類で絞る */
+#filt{display:flex;gap:6px;padding:10px 12px 4px;overflow-x:auto;scrollbar-width:none}
+#filt::-webkit-scrollbar{display:none}
+.f{flex:none;padding:6px 12px;border-radius:16px;font-size:13px;background:var(--bg2);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.f.on{background:var(--ink);color:#fff}
+.f i{width:9px;height:9px;border-radius:50%;display:inline-block}
+
+/* C 入力欄 */
+#addForm{display:flex;gap:6px;padding:8px 12px}
+#addText{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px}
+#addPin{flex:none;width:46px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:18px}
+#addGo{flex:none;width:50px;border-radius:12px;background:var(--acc);color:#fff;font-size:24px}
+#addMsg{margin:0 14px 4px;font-size:13px;color:var(--ng);line-height:1.5}
+#addMsg.ok{color:var(--acc)}
+
+/* 組と行 */
+.gh{display:flex;align-items:center;gap:8px;padding:8px 14px;font-size:13px;font-weight:bold;color:var(--ink2);background:var(--bg2);border-top:1px solid var(--line);border-bottom:1px solid var(--line);margin-top:8px}
+.gh span{flex:1}
+.gh.late{color:var(--ng);background:var(--ng-soft)}
+.gh.imphead{color:#fff;background:var(--star);border-color:var(--star)}
+.gh.fold{cursor:pointer;color:var(--muted)}
+.gbtn{font-size:12px;border-radius:8px;padding:3px 8px;background:var(--card);border:1px solid currentColor;font-weight:bold}
+.row{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);background:var(--card);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+.row.imp{background:#FFF8E6;border-left:4px solid var(--star)}
+.row.dragging{box-shadow:0 6px 18px rgba(0,0,0,.18);position:relative;z-index:5;background:#fff}
+.chk{flex:none;width:26px;height:26px;border:2px solid #B8B5AC;border-radius:50%}
+.chk.done{background:var(--acc);border-color:var(--acc);position:relative}
+.chk.done:after{content:"✓";color:#fff;position:absolute;left:5px;top:0;font-size:16px;font-weight:bold}
+.sq{flex:none;width:24px;height:24px;border:2px solid var(--acc);border-radius:6px}
+.sq.on{background:var(--acc)}
+.sq.off{border-color:#D9D6CC;background:var(--bg2)}
+.dot{flex:none;width:10px;height:10px;border-radius:50%}
+.t{flex:1;min-width:0}
+.t .ti{word-break:break-word;line-height:1.35}
+.row.imp .ti{font-weight:bold}
+.row.isdone .ti{color:var(--muted);text-decoration:line-through}
+.t small{display:block;color:var(--muted);font-size:12px;margin-top:2px}
+.t small .late{color:var(--ng);font-weight:bold}
+.tag{font-size:11px;border-radius:8px;padding:0 6px;background:var(--bg2);color:var(--ink2);margin-left:5px;font-weight:normal;white-space:nowrap}
+.sent{flex:none;font-size:11px;color:var(--acc);border:1px solid var(--acc);border-radius:8px;padding:1px 6px}
+.star{flex:none;font-size:22px;color:#CFCBC0;width:30px;text-align:center;line-height:1}
+.star.on{color:var(--star)}
+.mini{flex:none;font-size:12px;border:1px solid var(--acc);color:var(--acc);border-radius:8px;padding:3px 7px}
+.empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:14px;line-height:1.7}
+
+/* F 選んで送る */
+#selbar{position:fixed;left:0;right:0;bottom:calc(58px + env(safe-area-inset-bottom));max-width:520px;margin:0 auto;background:#ECF6EF;border-top:2px solid var(--acc);padding:10px 12px;z-index:20}
+#selbar .r{display:flex;align-items:center;gap:8px}
+#selCount{flex:1;font-size:14px}
+#selSend{background:var(--acc);color:#fff;border-radius:10px;padding:9px 12px;font-weight:bold}
+#selSend:disabled{opacity:.45}
+#selMsg{font-size:12px;color:var(--ink2);margin-top:6px;line-height:1.5}
+#selMsg.ng{color:var(--ng);font-weight:bold}
+
+/* H 下の切り替え */
+#tabs{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;display:flex;background:var(--card);border-top:1px solid var(--line);padding-bottom:env(safe-area-inset-bottom);z-index:21}
+#tabs button{flex:1;padding:9px 0 8px;font-size:12px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:1px}
+#tabs button b{font-size:20px;font-weight:normal}
+#tabs button.on{color:var(--acc);font-weight:bold}
+
+/* 月のカレンダー */
+#calHead{display:flex;align-items:center;justify-content:space-between;padding:14px 14px 8px;font-weight:bold;font-size:17px}
+#calHead button{width:44px;height:36px;font-size:18px;color:var(--ink2)}
+#calGrid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;padding:0 8px}
+.cw{text-align:center;font-size:12px;color:var(--muted);padding:4px 0}
+.cc{background:var(--card);border-radius:8px;min-height:56px;padding:4px 2px;text-align:center;font-size:14px;border:1px solid transparent}
+.cc.other{opacity:.38}
+.cc.today{border-color:var(--acc)}
+.cc.on{background:var(--acc);color:#fff}
+.cc em{display:block;font-style:normal;font-size:11px;font-weight:bold;color:var(--warn);margin-top:3px}
+.cc.on em{color:#fff}
+#calNote{font-size:12px;color:var(--muted);padding:10px 14px}
+
+/* 設定 */
+.sh{padding:16px 14px 6px;font-size:13px;font-weight:bold;color:var(--ink2)}
+.sbox{background:var(--card);border-top:1px solid var(--line);border-bottom:1px solid var(--line)}
+.srow{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid var(--line);font-size:15px}
+.srow:last-child{border-bottom:0}
+.srow span.k{flex:1}
+.srow .v{color:var(--muted);font-size:14px}
+.btn{border:1px solid var(--acc);color:var(--acc);border-radius:10px;padding:7px 12px;font-size:14px;background:var(--card);white-space:nowrap}
+.btn.fill{background:var(--acc);color:#fff}
+.btn.ng{border-color:var(--ng);color:var(--ng)}
+.btn.armed{background:var(--ng);color:#fff;border-color:var(--ng)}
+.btn:disabled{opacity:.45}
+.sin{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;background:#fff}
+.smsg{padding:6px 14px 0;font-size:13px;line-height:1.5;color:var(--acc)}
+.smsg.ng{color:var(--ng);font-weight:bold}
+.catedit{padding:10px 14px;border-bottom:1px solid var(--line);background:#FBFAF6}
+.swatches{display:flex;gap:8px;margin:10px 0}
+.sw{width:30px;height:30px;border-radius:50%;border:3px solid transparent}
+.sw.on{border-color:var(--ink)}
+.tog{width:50px;height:30px;border-radius:15px;background:#D9D6CC;position:relative;flex:none}
+.tog:after{content:"";position:absolute;left:3px;top:3px;width:24px;height:24px;border-radius:50%;background:#fff;transition:left .15s}
+.tog.on{background:var(--acc)}.tog.on:after{left:23px}
+.foot{padding:16px 14px;color:var(--muted);font-size:12px;line-height:1.7}
+
+/* G 詳細（下から出る） */
+#sheetBack{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:30}
+#sheet{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;max-height:88vh;overflow-y:auto;background:var(--bg);border-radius:16px 16px 0 0;z-index:31;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+#sheet .top{position:sticky;top:0;display:flex;align-items:center;gap:8px;padding:12px 14px;background:var(--bg);border-bottom:1px solid var(--line);z-index:2}
+#sheet .top b{flex:1;font-size:16px}
+#sheet textarea{width:100%;min-height:72px;padding:10px;border:1px solid var(--line);border-radius:10px;font-size:15px;resize:vertical}
+.subrow{display:flex;align-items:center;gap:10px;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--card)}
+.subrow .chk{width:22px;height:22px}
+.subrow .chk.done:after{left:3px;top:-2px;font-size:14px}
+.subrow span{flex:1}
+.x{color:var(--muted);font-size:18px;width:30px}
+
+/* ↩ 元に戻す */
+#toast{position:fixed;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom));max-width:496px;margin:0 auto;background:#2C2C2A;color:#fff;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;z-index:40;font-size:14px}
+#toast span{flex:1}
+#toast button{color:#9BE3B7;font-weight:bold}
+</style>
+</head>
+<body>
+
+<header id="hdr">
+  <div id="hdrTitle"></div>
+  <button class="hbtn" id="goToday">今日</button>
+  <button class="hbtn" id="selToggle">📤 選ぶ</button>
+</header>
+
+<div id="saveErr" class="bar ng hide">⚠️ 保存できませんでした。いま入れた内容は、アプリを閉じると消えます（iPhone の空き容量を確かめてください）。</div>
+<div id="brokenBar" class="bar ng hide"></div>
+
+<section id="listView">
+  <div id="strip">
+    <button class="arr" id="wkPrev" aria-label="前の週">‹</button>
+    <div id="days"></div>
+    <button class="arr" id="wkNext" aria-label="次の週">›</button>
+  </div>
+  <div id="nag" class="bar warn hide"></div>
+  <div id="filt"></div>
+  <form id="addForm" autocomplete="off">
+    <input id="addText" type="text" enterkeyhint="done" maxlength="200">
+    <button type="button" id="addPin" title="期限なしで入れる">📌</button>
+    <button type="submit" id="addGo" aria-label="入れる">＋</button>
+  </form>
+  <div id="addMsg"></div>
+  <div id="groups"></div>
+</section>
+
+<section id="calView" class="hide">
+  <div id="calHead"><button id="calPrev">‹</button><span id="calTitle"></span><button id="calNext">›</button></div>
+  <div id="calGrid"></div>
+  <div id="calNote">数字＝その日の残り件数・⭐＝重要がある日。押すとその日の一覧へ。</div>
+</section>
+
+<section id="setView" class="hide"></section>
+
+<div id="selbar" class="hide">
+  <div class="r"><span id="selCount"></span><button id="selSend">📤 Task Desk へ送る</button><button class="btn" id="selCancel">やめる</button></div>
+  <div id="selMsg">※ 送るのは題名・期限・種類・重要まで。繰り返し・小項目・メモは送られません。送信済（灰色）は選べません。</div>
+</div>
+
+<nav id="tabs">
+  <button data-tab="list" class="on"><b>☑</b>一覧</button>
+  <button data-tab="cal"><b>📅</b>カレンダー</button>
+  <button data-tab="set"><b>⚙</b>設定</button>
+</nav>
+
+<div id="sheetBack" class="hide"></div>
+<div id="sheet" class="hide"></div>
+<div id="toast" class="hide"><span id="toastText"></span><button id="toastUndo">↩ 元に戻す</button></div>
+<input type="file" id="importFile" accept=".json,application/json" class="hide">
+
+<script>
+// ===LOGIC-START===
+/* 📱 タスク — 中身の計算（画面に触らない部分）
+ *
+ * 🔴 ここはテスト（tests/test_iphone_todo.py）が切り出して node で動かす。
+ *    画面の部品（document など）をここで使わないこと。
+ *
+ * 写しの原本（ズレるとテストが落ちる）：
+ *   日付の言葉  … task_desk/core/dates.py の parse_when
+ *   1行の読み方 … task_desk/core/inbox.py の parse_line
+ *   繰り返し    … task_desk/core/recurrence.py の next_due
+ *   送る文の全角化 … shiire_calc/index.html の safeMemo
+ */
+
+// 保存名。🔴 計算機（shiire_calc_…）と同じ住所で動くので、必ず iphone_todo_ で始める
+var KEYS = {
+  tasks: "iphone_todo_tasks_v1",
+  cats: "iphone_todo_cats_v1",
+  prefs: "iphone_todo_prefs_v1",
+  broken: "iphone_todo_broken_v1",  // 読めなかった保存データの退避先（上書きで消さないため）
+  beforeImport: "iphone_todo_before_import_v1"   // 控えで置き換える直前の全件（直前の1回ぶんだけ）
+};
+var SEND_MAX_CHARS = 2000;         // Discord の1通の上限
+var SEND_RETRIES = 3;              // 回数制限（429）で待って送り直す回数
+var UNTITLED = "（題名なし）";     // 題名が空のときに入れる名前（空の題名は控えの検査で「壊れている」になる）
+
+// 最初の種類＝Task Desk のカテゴリと同じ名前・同じ色（task_desk の todo.db で確認・2026-09-26）
+// 色も Task Desk と同じ（task_desk/ui/style.py の CATEGORY_COLORS）＝PC と iPhone で同じ種類が同じ色に見える
+var DEFAULT_CATS = [
+  { id: "c1", name: "ツール開発", color: "#2E86DE" },
+  { id: "c2", name: "生活", color: "#22A76B" },
+  { id: "c3", name: "仕事", color: "#E08A1E" }
+];
+var CAT_COLORS = ["#2E86DE", "#22A76B", "#E08A1E", "#9B59B6", "#E74C3C", "#12A5A5"];
+var NONE_COLOR = "#A5A39A";                // 未分類＝目立たせない（Task Desk と同じ考え）
+
+var WEEKDAY_JP = ["月", "火", "水", "木", "金", "土", "日"];   // 月0〜日6（Python と同じ並び）
+
+var SLEEPY_DAYS = 30;      // 期限なしがこの日数さわられていないと 💤
+var PRUNE_DAYS = 90;       // 完了からこの日数たったら片付ける
+var NAG_DAYS = 14;         // 控えをこの日数書き出していないと一言
+var IMP_FOLD_OVER = 5;     // 重要がこの件数を超えたら畳める
+
+// ── 日付 ────────────────────────────────────────
+function pad2(n) { return (n < 10 ? "0" : "") + n; }
+function ymd(d) { return d.getFullYear() + "-" + pad2(d.getMonth() + 1) + "-" + pad2(d.getDate()); }
+function toDate(s) {
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(String(s || ""));
+  if (!m) return null;
+  var d = new Date(+m[1], +m[2] - 1, +m[3]);
+  // 2/31 のような無い日は Date が勝手に繰り上げるので、戻して比べて弾く
+  if (d.getFullYear() !== +m[1] || d.getMonth() !== +m[2] - 1 || d.getDate() !== +m[3]) return null;
+  return d;
+}
+function addDays(s, n) { var d = toDate(s); d.setDate(d.getDate() + n); return ymd(d); }
+function weekdayOf(s) { return (toDate(s).getDay() + 6) % 7; }       // 月0〜日6
+function daysBetween(a, b) {                                         // b − a（日数）
+  var x = toDate(a), y = toDate(b);
+  return Math.round((Date.UTC(y.getFullYear(), y.getMonth(), y.getDate())
+                   - Date.UTC(x.getFullYear(), x.getMonth(), x.getDate())) / 86400000);
+}
+function clampDay(y, m, day) {                                       // m は 0 始まり
+  var last = new Date(y, m + 1, 0).getDate();
+  return ymd(new Date(y, m, Math.min(day, last)));
+}
+function shortDate(s) {                                             // 9/26（土）
+  var d = toDate(s);
+  return d ? (d.getMonth() + 1) + "/" + d.getDate() + "（" + WEEKDAY_JP[weekdayOf(s)] + "）" : "";
+}
+
+// ── 日付の言葉（task_desk/core/dates.py の parse_when の写し）──
+var WHEN_WORDS = {
+  "今日": "today", "きょう": "today", "today": "today",
+  "明日": "tomorrow", "あした": "tomorrow", "あす": "tomorrow", "tomorrow": "tomorrow",
+  "週末": "weekend", "今週末": "weekend", "weekend": "weekend",
+  "来週": "nextweek", "らいしゅう": "nextweek", "nextweek": "nextweek"
+};
+function quickWhen(kind, base) {
+  if (kind === "today") return base;
+  if (kind === "tomorrow") return addDays(base, 1);
+  if (kind === "weekend") return addDays(base, 6 - weekdayOf(base));   // 今週の日曜
+  if (kind === "nextweek") return addDays(base, 7 - weekdayOf(base));  // 来週の月曜
+  return "";
+}
+/** '明日' '週末' '8/30' '2026-08-30' → 'YYYY-MM-DD'。読めなければ ""（今日で埋めない）。
+ *  ⚠ 原本は「日曜」「日曜日」を読めない（末尾の 曜・日 を削るとき 日 まで消える）。
+ *     こちらは読める。送る文は必ず YYYY-MM-DD にするので PC 側の読み違いは起きない。 */
+function parseWhen(word, base) {
+  word = String(word || "").trim();
+  if (!word) return "";
+  if (WHEN_WORDS.hasOwnProperty(word)) return quickWhen(WHEN_WORDS[word], base);
+  if (word === "明後日" || word === "あさって") return addDays(base, 2);
+  var name = word.replace(/曜日?$/, "");
+  var wi = WEEKDAY_JP.indexOf(name);
+  if (wi >= 0) return addDays(base, ((wi - weekdayOf(base)) % 7 + 7) % 7 || 7);
+  var d = toDate(word);
+  if (d) return ymd(d);
+  var m = /^(\d{1,2})[\/\-](\d{1,2})$/.exec(word);
+  if (m) {
+    var y = toDate(base).getFullYear();
+    var s = pad2(+m[1]) + "-" + pad2(+m[2]);
+    var cand = toDate(y + "-" + s);
+    if (!cand) return "";
+    if (ymd(cand) < base) cand = toDate((y + 1) + "-" + s);
+    return cand ? ymd(cand) : "";
+  }
+  return "";
+}
+
+// ── 1行の読み方（task_desk/core/inbox.py の parse_line の写し）──
+var PRIORITY_WORDS = { "高": 1, "たかい": 1, "high": 1, "!": 1,
+                       "低": -1, "ひくい": -1, "low": -1, "通常": 0, "normal": 0 };
+/** 入力欄の1行 → { title, due, catName, imp, warnings }。
+ *  due は @ が無ければ null（呼び出し側が「今見ている日」か「期限なし」を決める）。
+ *  #名前 が種類に無ければ未分類＋一言（勝手に種類を増やさない）。 */
+function parseInput(text, catNames, base) {
+  text = String(text || "").replace(/\s+/g, " ");
+  var warnings = [], due = null, catName = null, pri = 0, rest = text, m;
+  var re = /(?:^|\s)([@#!])(\S+)/g;
+  while ((m = re.exec(text)) !== null) {
+    var mark = m[1], value = m[2];
+    if (mark === "@") {
+      var got = parseWhen(value, base);
+      if (got) { due = got; rest = rest.replace("@" + value, ""); }
+      else warnings.push("「@" + value + "」は日付として読めませんでした（題名に残しています）");
+    } else if (mark === "#") {
+      if (catNames.indexOf(value) >= 0) catName = value;
+      else warnings.push("種類「" + value + "」はありません（未分類にしました）");
+      rest = rest.replace("#" + value, "");
+    } else {
+      if (PRIORITY_WORDS.hasOwnProperty(value)) pri = PRIORITY_WORDS[value];
+      else warnings.push("「!" + value + "」は読めませんでした（重要にしていません）");
+      rest = rest.replace("!" + value, "");
+    }
+    re.lastIndex = m.index + m[0].length;
+  }
+  // くっつけて書いた印（牛乳を買う@明日）は読めたときだけ拾う（メールアドレスを巻き込まない）
+  var glued = /(\S)([@#])([^\s@#!]+)/g;
+  while ((m = glued.exec(text)) !== null) {
+    var gm = m[2], gv = m[3];
+    if (gm === "@" && due === null) {
+      var g = parseWhen(gv, base);
+      if (g) { due = g; rest = rest.replace("@" + gv, ""); }
+    } else if (gm === "#" && catName === null && catNames.indexOf(gv) >= 0) {
+      catName = gv; rest = rest.replace("#" + gv, "");
+    }
+    // 1字戻す＝値の最後の字を、次の印の「直前の字」として使えるように（原本は先読みで字を食わない）
+    glued.lastIndex = m.index + m[0].length - 1;
+  }
+  return { title: rest.split(" ").filter(Boolean).join(" "), due: due, catName: catName,
+           imp: pri === 1, warnings: warnings };
+}
+
+// ── 繰り返し（task_desk/core/recurrence.py の next_due の写し）──
+var REPEAT_LABEL = { "": "繰り返さない", daily: "毎日", weekly: "毎週", monthly: "毎月" };
+/** base の「次」の日。kind が空なら ""。value … weekly=曜日(月0〜日6)／monthly=日付(1〜31) */
+function nextDue(kind, value, base) {
+  if (kind === "daily") return addDays(base, 1);
+  if (kind === "weekly") {
+    var t = ((+value % 7) + 7) % 7;
+    return addDays(base, ((t - weekdayOf(base)) % 7 + 7) % 7 || 7);   // 同じ曜日なら1週間後
+  }
+  if (kind === "monthly") {
+    var day = Math.max(1, Math.min(31, +value));
+    var b = toDate(base), y = b.getFullYear(), mo = b.getMonth();
+    var cand = clampDay(y, mo, day);                                  // 無い日は月末に寄せる
+    if (cand > base) return cand;
+    mo += 1; if (mo > 11) { mo = 0; y += 1; }
+    return clampDay(y, mo, day);
+  }
+  return "";
+}
+function repeatText(r) {
+  if (!r || !r.kind) return "";
+  if (r.kind === "daily") return "毎日";
+  if (r.kind === "weekly") return "毎週" + WEEKDAY_JP[((+r.value % 7) + 7) % 7] + "曜";
+  if (r.kind === "monthly") return "毎月" + (+r.value) + "日";
+  return "";
+}
+/** 繰り返しの次の回の期限。起点は**もとの期限**（遅れて完了しても曜日がズレない）。
+ *  次の回が過去になるなら今日以降まで進める（task_desk/core/repositories.py と同じ）。 */
+function nextOccurrence(task, today) {
+  var r = task.repeat;
+  if (!r || !r.kind) return "";
+  var nxt = nextDue(r.kind, r.value, task.due || today);
+  var guard = 0;
+  while (nxt && nxt < today && guard < 400) { nxt = nextDue(r.kind, r.value, nxt); guard += 1; }
+  return nxt;
+}
+
+// ── タスクを作る・完了にする ─────────────────────────
+function newId(now) { return "t" + now.getTime().toString(36) + Math.random().toString(36).slice(2, 7); }
+function makeTask(fields, now) {
+  var iso = now.toISOString();
+  return {
+    id: fields.id || newId(now), title: fields.title, due: fields.due || "",
+    cat: fields.cat || "", imp: !!fields.imp,
+    repeat: fields.repeat || { kind: "", value: 0 },
+    subs: fields.subs || [], note: fields.note || "",
+    done: false, doneAt: "", order: fields.order || 0, sentAt: "",
+    createdAt: iso, touchedAt: iso
+  };
+}
+/** 保存データ・控えから読んだタスクの欠けた欄を makeTask と同じ既定値で埋める（あれば変えない）。
+ *  🔴 欄が1つ欠けたタスクが1件あるだけで、描画が落ちて画面ごと開けなくなるのを防ぐ。 */
+function normalizeTask(t, now) {
+  function str(v) { return typeof v === "string" ? v : ""; }
+  function when(v) { return typeof v === "string" && !isNaN(new Date(v).getTime()) ? v : ""; }
+  var r = t.repeat && typeof t.repeat === "object" ? t.repeat : {};
+  t.title = typeof t.title === "string" && t.title.trim() ? t.title : UNTITLED;
+  t.due = str(t.due); t.cat = str(t.cat); t.note = str(t.note);
+  t.imp = !!t.imp; t.done = !!t.done;
+  t.doneAt = str(t.doneAt); t.sentAt = str(t.sentAt);
+  t.order = typeof t.order === "number" && isFinite(t.order) ? t.order : 0;
+  t.repeat = { kind: str(r.kind), value: typeof r.value === "number" && isFinite(r.value) ? r.value : 0 };
+  t.subs = (Array.isArray(t.subs) ? t.subs : []).filter(function (s) { return s && typeof s.t === "string"; })
+    .map(function (s) { return { t: s.t, done: !!s.done }; });
+  t.createdAt = when(t.createdAt) || now.toISOString();
+  t.touchedAt = when(t.touchedAt) || t.createdAt;
+  return t;
+}
+/** 完了にする。繰り返しなら次の回を1件作って返す（今回分は完了として残る）。
+ *  小項目は未チェックに戻して引き継ぐ。送信済みの印は引き継がない（次の回はまだ送っていない）。 */
+function completeTask(task, now) {
+  var today = ymd(now);
+  task.done = true;
+  task.doneAt = now.toISOString();
+  var due = nextOccurrence(task, today);
+  if (!due) return null;
+  return makeTask({
+    title: task.title, due: due, cat: task.cat, imp: task.imp,
+    repeat: { kind: task.repeat.kind, value: task.repeat.value }, note: task.note,
+    subs: task.subs.map(function (s) { return { t: s.t, done: false }; }), order: task.order
+  }, now);
+}
+
+// ── 一覧の組み分け ─────────────────────────────────
+function byOrder(a, b) {
+  if (a.order !== b.order) return a.order - b.order;
+  return a.createdAt < b.createdAt ? -1 : a.createdAt > b.createdAt ? 1 : 0;
+}
+function byDueThenOrder(a, b) {
+  var x = a.due || "9999", y = b.due || "9999";           // 期限なしは後ろ
+  if (x !== y) return x < y ? -1 : 1;
+  return byOrder(a, b);
+}
+/** 今見ている日の一覧を組み分ける。
+ *  重要＝日付に関係なく全部（ほかの組には出さない＝二重に出さない）
+ *  期限切れ＝今日を見ているときだけ
+ *  cat が "" 以外なら、その種類だけ（"none"＝未分類だけ） */
+function groupTasks(tasks, viewDay, today, cat) {
+  var g = { imp: [], overdue: [], day: [], undated: [], done: [] };
+  tasks.forEach(function (t) {
+    if (cat === "none" ? t.cat !== "" : (cat && t.cat !== cat)) return;
+    if (t.done) { if (t.doneAt && ymd(new Date(t.doneAt)) === viewDay) g.done.push(t); return; }
+    if (t.imp) { g.imp.push(t); return; }
+    if (!t.due) { g.undated.push(t); return; }
+    if (t.due === viewDay) { g.day.push(t); return; }
+    if (viewDay === today && t.due < today) g.overdue.push(t);
+  });
+  g.imp.sort(byDueThenOrder);
+  g.overdue.sort(byDueThenOrder);
+  g.day.sort(byOrder);
+  g.undated.sort(byOrder);
+  g.done.sort(function (a, b) { return a.doneAt < b.doneAt ? 1 : -1; });
+  return g;
+}
+/** 期限切れ（重要を除く）を全部今日へ。動かした件数を返す。 */
+function moveOverdueToToday(tasks, today, nowIso) {
+  var n = 0;
+  tasks.forEach(function (t) {
+    if (!t.done && !t.imp && t.due && t.due < today) { t.due = today; t.touchedAt = nowIso; n += 1; }
+  });
+  return n;
+}
+/** 期限なしが SLEEPY_DAYS 日以上さわられていない＝💤 */
+function isSleepy(t, today) {
+  return !t.done && !t.due && daysBetween(ymd(new Date(t.touchedAt)), today) >= SLEEPY_DAYS;
+}
+function sleepyDays(t, today) { return daysBetween(ymd(new Date(t.touchedAt)), today); }
+/** 完了から PRUNE_DAYS 日たったものを除いた一覧を返す（控えには残っている） */
+function pruneDone(tasks, today) {
+  return tasks.filter(function (t) {
+    return !(t.done && t.doneAt && daysBetween(ymd(new Date(t.doneAt)), today) >= PRUNE_DAYS);
+  });
+}
+/** アイコンの数字＝今日と期限切れの残り（期限なし・明日以降は数えない） */
+function badgeCount(tasks, today) {
+  return tasks.filter(function (t) { return !t.done && t.due && t.due <= today; }).length;
+}
+/** その日の残り件数と、重要があるか（週の帯・月のカレンダー用） */
+function dayInfo(tasks, day) {
+  var n = 0, imp = false;
+  tasks.forEach(function (t) {
+    if (!t.done && t.due === day) { n += 1; if (t.imp) imp = true; }
+  });
+  return { n: n, imp: imp };
+}
+function weekDays(viewDay, weekStart) {                     // weekStart: "mon" | "sun"
+  var off = weekStart === "sun" ? (weekdayOf(viewDay) + 1) % 7 : weekdayOf(viewDay);
+  var first = addDays(viewDay, -off), out = [];
+  for (var i = 0; i < 7; i++) out.push(addDays(first, i));
+  return out;
+}
+function monthCells(year, month, weekStart) {              // month は 1〜12。6週×7日
+  var first = year + "-" + pad2(month) + "-01";
+  return weekDays(first, weekStart).slice(0, 1).reduce(function (acc, start) {
+    for (var i = 0; i < 42; i++) acc.push(addDays(start, i));
+    return acc;
+  }, []);
+}
+
+// ── Task Desk へ送る文 ─────────────────────────────
+/** 記号を全角に（shiire_calc の safeMemo の写し）。
+ *  🔴 Task Desk は受け取った行の**どこにあっても** @ # ! を期限・カテゴリ・優先度として読む。 */
+function safeMemo(s) {
+  return String(s).replace(/[@#!／]/g, function (c) {
+    return { "@": "＠", "#": "＃", "!": "！", "／": "/" }[c];
+  });
+}
+/** 送る1行＝`題名 @期限 #種類 !高`。無いものは付けない。
+ *  🔴 繰り返し・小項目・メモは送らない（Task Desk の受け口は1行） */
+function sendLine(task, cats) {
+  var parts = [safeMemo(String(task.title).replace(/\s+/g, " ").trim())];
+  if (task.due) parts.push("@" + task.due);
+  var c = findCat(cats, task.cat);
+  if (c) parts.push("#" + c.name);
+  if (task.imp) parts.push("!高");
+  return parts.join(" ");
+}
+function findCat(cats, id) {
+  for (var i = 0; i < cats.length; i++) if (cats[i].id === id) return cats[i];
+  return null;
+}
+/** 種類の名前として使えるか。空白・@#! は Task Desk が読めなくなるので不可。重複も不可 */
+function catNameProblem(name, cats, selfId) {
+  name = String(name || "").trim();
+  if (!name) return "名前が空です";
+  if (/\s/.test(name)) return "名前に空白は使えません（Task Desk が読めなくなります）";
+  if (/[@#!＠＃！]/.test(name)) return "名前に @ # ! は使えません";
+  if (name.length > 20) return "名前は20文字までです";
+  for (var i = 0; i < cats.length; i++)
+    if (cats[i].name === name && cats[i].id !== selfId) return "同じ名前の種類があります";
+  return "";
+}
+function looksLikeWebhook(u) {
+  u = String(u || "").trim();
+  return u.indexOf("https://") === 0 && u.indexOf("discord") >= 0 && u.indexOf("/webhooks/") >= 0;
+}
+
+// ── 控え（書き出し・取り込み）────────────────────────
+/** 控えの中身。🔴 送り先（webhook）は入れない＝Discord に控えを送っても送り先が漏れない */
+function exportData(tasks, cats, prefs, now) {
+  return {
+    app: "iphone_todo", format: 1, exportedAt: now.toISOString(),
+    tasks: tasks, cats: cats,
+    prefs: { weekStart: prefs.weekStart || "mon", badge: !!prefs.badge }
+  };
+}
+/** 取り込む前の検査。{ ok, why, data }。壊れた控えは取り込まない（今のデータを守る） */
+function checkImport(obj) {
+  if (!obj || typeof obj !== "object") return { ok: false, why: "控えのファイルではありません" };
+  if (obj.app !== "iphone_todo") return { ok: false, why: "このアプリの控えではありません" };
+  if (obj.format !== 1) return { ok: false, why: "控えの形式が違います（format " + obj.format + "）" };
+  if (!Array.isArray(obj.tasks) || !Array.isArray(obj.cats)) return { ok: false, why: "控えの中身が欠けています" };
+  var ids = {};
+  for (var i = 0; i < obj.tasks.length; i++) {
+    var t = obj.tasks[i];
+    // 題名が空なだけなら取り込む（normalizeTask が「（題名なし）」にする）＝1件のために全部を諦めさせない
+    if (!t || typeof t !== "object" || !t.id || typeof t.id !== "string" || typeof t.title !== "string")
+      return { ok: false, why: (i + 1) + "件目のタスクが壊れています" };
+    if (ids[t.id]) return { ok: false, why: "同じ番号のタスクが2つあります" };
+    ids[t.id] = true;
+    if (t.due && !toDate(t.due)) return { ok: false, why: "「" + t.title + "」の期限が読めません" };
+  }
+  for (var j = 0; j < obj.cats.length; j++) {
+    var c = obj.cats[j];
+    if (!c || typeof c.id !== "string" || typeof c.name !== "string")
+      return { ok: false, why: (j + 1) + "番目の種類が壊れています" };
+  }
+  var now = new Date();
+  obj.tasks.forEach(function (t) { normalizeTask(t, now); });
+  obj.cats.forEach(function (c) { if (typeof c.color !== "string" || !c.color) c.color = NONE_COLOR; });
+  return { ok: true, why: "", data: obj };
+}
+/** 控えを最後に書き出してから NAG_DAYS 日以上＝一言出す（タスクが1件も無いうちは出さない） */
+function backupNag(lastBackup, taskCount, today) {
+  if (!taskCount) return "";
+  if (!lastBackup) return "控えをまだ一度も書き出していません（⚙ 設定から）";
+  var n = daysBetween(lastBackup, today);
+  return n >= NAG_DAYS ? "控えを最後に書き出してから " + n + "日たちました（⚙ 設定から）" : "";
+}
+// ===LOGIC-END===
+</script>
+<script>
+// ── 画面（ここから下は document を使う。テストは切り出さない）──────────────
+var S = { tasks: [], cats: [], prefs: {} };
+var V = { tab: "list", day: "", cat: "", selecting: false, selected: {}, impOpen: true,
+          undatedOpen: false, doneOpen: false, calY: 0, calM: 0, editCat: null, sheetId: null,
+          sending: false, pinMode: false };
+
+function el(id) { return document.getElementById(id); }
+function show(id, on) { el(id).classList.toggle("hide", !on); }
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+  });
+}
+function today() { return ymd(new Date()); }
+function nowIso() { return new Date().toISOString(); }
+function taskById(id) { for (var i = 0; i < S.tasks.length; i++) if (S.tasks[i].id === id) return S.tasks[i]; return null; }
+function catColor(id) { var c = findCat(S.cats, id); return c ? c.color : NONE_COLOR; }
+
+// ── 保存 ──────────────────────────────────────
+// 🔴 読めない保存データを空で上書きしない＝退避先（KEYS.broken）へ写してから新しく始める
+function parseOr(raw, fallback, what, broken) {
+  if (!raw) return fallback;
+  try { return JSON.parse(raw); } catch (e) { broken.push(what); return fallback; }
+}
+function loadAll() {
+  var rt = null, rc = null, rp = null, broken = [];
+  try {
+    rt = localStorage.getItem(KEYS.tasks);
+    rc = localStorage.getItem(KEYS.cats);
+    rp = localStorage.getItem(KEYS.prefs);
+  } catch (e) {
+    showBroken("保存場所を開けませんでした（プライベートブラウズでは保存できません）");
+  }
+  S.tasks = parseOr(rt, [], "タスク", broken);
+  S.cats = parseOr(rc, null, "種類", broken) || DEFAULT_CATS.map(function (c) { return { id: c.id, name: c.name, color: c.color }; });
+  S.prefs = parseOr(rp, {}, "設定", broken);
+  if (!Array.isArray(S.tasks)) { broken.push("タスク"); S.tasks = []; }
+  if (!Array.isArray(S.cats)) { broken.push("種類"); S.cats = DEFAULT_CATS.map(function (c) { return { id: c.id, name: c.name, color: c.color }; }); }
+  if (!S.prefs || typeof S.prefs !== "object") { broken.push("設定"); S.prefs = {}; }
+  // 欄が欠けたタスクで画面ごと落ちないように埋める（番号の無いものだけは使えないので外す）
+  var nowD = new Date();
+  var usable = S.tasks.filter(function (t) { return t && typeof t === "object" && typeof t.id === "string" && t.id; });
+  if (usable.length !== S.tasks.length) broken.push("タスク" + (S.tasks.length - usable.length) + "件");
+  S.tasks = usable.map(function (t) { return normalizeTask(t, nowD); });
+  S.cats = S.cats.filter(function (c) { return c && typeof c.id === "string" && typeof c.name === "string"; });
+  S.cats.forEach(function (c) { if (typeof c.color !== "string" || !c.color) c.color = NONE_COLOR; });
+  if (broken.length) {
+    try {
+      localStorage.setItem(KEYS.broken, JSON.stringify({ at: nowIso(), tasks: rt, cats: rc, prefs: rp }));
+    } catch (e) { /* 退避もできないときは表示だけ */ }
+    showBroken("保存データ（" + broken.join("・") + "）が読めませんでした。元のデータは退避してあります。控えがあれば ⚙ 設定 → 取り込む で戻せます。");
+  }
+  if (!S.prefs.weekStart) S.prefs.weekStart = "mon";
+}
+function showBroken(text) { el("brokenBar").textContent = "⚠️ " + text; show("brokenBar", true); }
+function saveAll() {
+  try {
+    localStorage.setItem(KEYS.tasks, JSON.stringify(S.tasks));
+    localStorage.setItem(KEYS.cats, JSON.stringify(S.cats));
+    localStorage.setItem(KEYS.prefs, JSON.stringify(S.prefs));
+    show("saveErr", false);
+  } catch (e) {
+    show("saveErr", true);           // 🔴 黙らない（閉じると消えることを知らせる）
+  }
+  updateBadge();
+}
+function touch(t) { t.touchedAt = nowIso(); }
+
+// ── アイコンの数字 ──────────────────────────────
+function updateBadge() {
+  if (!("setAppBadge" in navigator)) return;
+  var n = S.prefs.badge ? badgeCount(S.tasks, today()) : 0;
+  var p = n ? navigator.setAppBadge(n) : navigator.clearAppBadge();
+  if (p && p.catch) p.catch(function () {});
+}
+
+// ── 2度押しの確認（消す・置き換える・まとめて動かす）──────────
+var armed = {};
+function armOr(key, btn, label, go) {
+  if (armed[key]) { clearTimeout(armed[key].t); delete armed[key]; go(); return; }
+  var before = btn.textContent;
+  btn.textContent = label;
+  btn.classList.add("armed");
+  armed[key] = { t: setTimeout(function () {
+    delete armed[key]; btn.textContent = before; btn.classList.remove("armed");
+  }, 4000) };
+}
+
+// ── 全体の描き直し ──────────────────────────────
+function render() {
+  var td = today();
+  if (!V.day) V.day = td;
+  var d = toDate(V.day);
+  el("hdrTitle").innerHTML = V.tab === "list"
+    ? esc((d.getMonth() + 1) + "月" + d.getDate() + "日（" + WEEKDAY_JP[weekdayOf(V.day)] + "）") + (V.day === td ? "<small>今日</small>" : "")
+    : V.tab === "cal" ? "カレンダー" : "設定";
+  show("goToday", V.tab !== "set" && (V.day !== td || V.tab === "cal"));
+  show("selToggle", V.tab === "list");
+  el("selToggle").classList.toggle("on", V.selecting);
+  el("selToggle").textContent = V.selecting ? "✕ 選ぶのをやめる" : "📤 選ぶ";
+  show("listView", V.tab === "list");
+  show("calView", V.tab === "cal");
+  show("setView", V.tab === "set");
+  show("selbar", V.tab === "list" && V.selecting);
+  Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
+    b.classList.toggle("on", b.getAttribute("data-tab") === V.tab);
+  });
+  if (V.tab === "list") renderList();
+  if (V.tab === "cal") renderCal();
+  if (V.tab === "set") renderSettings();
+}
+
+// ── 一覧 ─────────────────────────────────────
+function renderList() {
+  var td = today();
+  // B 週の日付
+  el("days").innerHTML = weekDays(V.day, S.prefs.weekStart).map(function (day) {
+    var info = dayInfo(S.tasks, day);
+    return '<button class="d' + (day === V.day ? " on" : "") + (day === td ? " today" : "") + '" data-day="' + day + '">'
+      + WEEKDAY_JP[weekdayOf(day)] + "<b>" + toDate(day).getDate() + "</b><i>"
+      + (info.imp ? "⭐" : "") + (info.n ? info.n : "") + "</i></button>";
+  }).join("");
+
+  // 控えの一言
+  var nag = backupNag(S.prefs.lastBackup, S.tasks.length, td);
+  el("nag").textContent = nag ? "💾 " + nag : "";
+  show("nag", !!nag);
+
+  // N 種類で絞る
+  var chips = [{ id: "", name: "すべて" }].concat(S.cats).concat([{ id: "none", name: "未分類" }]);
+  el("filt").innerHTML = chips.map(function (c) {
+    var dot = c.color ? '<i style="background:' + c.color + '"></i>' : (c.id === "none" ? '<i style="background:' + NONE_COLOR + '"></i>' : "");
+    return '<button class="f' + (V.cat === c.id ? " on" : "") + '" data-cat="' + esc(c.id) + '">' + dot + esc(c.name) + "</button>";
+  }).join("");
+
+  el("addText").placeholder = V.day === td
+    ? "やることを入れる（@明日 #仕事 !高 も書ける）"
+    : shortDate(V.day) + " に入れる（@ で別の日も）";
+
+  var g = groupTasks(S.tasks, V.day, td, V.cat);
+  var h = [];
+
+  // Q ⭐ 重要（日付に関係なく全部）
+  if (g.imp.length) {
+    var many = g.imp.length > IMP_FOLD_OVER;
+    h.push('<div class="gh imphead"><span>⭐ 重要 ' + g.imp.length + "件</span>"
+      + (many ? '<button class="gbtn" data-act="impFold">' + (V.impOpen ? "畳む" : "すべて見る") + "</button>" : "") + "</div>");
+    if (!many || V.impOpen) g.imp.forEach(function (t) { h.push(rowHtml(t, { grp: "imp", showDue: true })); });
+  }
+  // ⚠ 期限切れ（今日を見ているときだけ）
+  if (g.overdue.length) {
+    h.push('<div class="gh late"><span>⚠ 期限切れ ' + g.overdue.length + '件</span>'
+      + (V.selecting ? "" : '<button class="gbtn" data-act="allToday">すべて今日へ</button>') + "</div>");
+    g.overdue.forEach(function (t) { h.push(rowHtml(t, { grp: "overdue", showDue: true })); });
+  }
+  // その日
+  h.push('<div class="gh"><span>' + (V.day === td ? "今日" : shortDate(V.day)) + " " + g.day.length + "件</span></div>");
+  h.push('<div data-drop="day">');
+  if (g.day.length) g.day.forEach(function (t) { h.push(rowHtml(t, { grp: "day" })); });
+  else h.push('<div class="empty">この日のやることはありません。<br>上の欄に打って ＋ で入れられます。</div>');
+  h.push("</div>");
+  // P 📌 期限なし
+  if (g.undated.length) {
+    h.push('<div class="gh fold" data-act="undatedFold"><span>' + (V.undatedOpen ? "▼" : "▶") + " 📌 期限なし（いつか）" + g.undated.length + "件</span></div>");
+    if (V.undatedOpen) {
+      h.push('<div data-drop="undated">');
+      g.undated.forEach(function (t) { h.push(rowHtml(t, { grp: "undated" })); });
+      h.push("</div>");
+    }
+  }
+  // E 完了
+  if (g.done.length) {
+    h.push('<div class="gh fold" data-act="doneFold"><span>' + (V.doneOpen ? "▼" : "▶") + " "
+      + (V.day === td ? "今日" : shortDate(V.day) + " に") + " 完了した " + g.done.length + "件</span></div>");
+    if (V.doneOpen) g.done.forEach(function (t) { h.push(rowHtml(t, { grp: "done" })); });
+  }
+  el("groups").innerHTML = h.join("");
+  renderSelCount();
+}
+
+function rowHtml(t, o) {
+  var td = today();
+  var cat = findCat(S.cats, t.cat);
+  var sub = [];
+  if (o.showDue && t.due) {
+    var late = t.due < td;
+    sub.push('<span class="' + (late ? "late" : "") + '">' + (t.due === td ? "今日" : shortDate(t.due)) + "まで</span>");
+  } else if (o.showDue) sub.push("期限なし");
+  var rep = repeatText(t.repeat);
+  if (rep) sub.push("🔁 " + rep);
+  if (t.subs.length) {
+    var dn = t.subs.filter(function (s) { return s.done; }).length;
+    sub.push("小項目 " + dn + "/" + t.subs.length);
+  }
+  if (o.grp === "undated" && isSleepy(t, td)) sub.push("💤 " + sleepyDays(t, td) + "日さわっていない");
+  if (t.note) sub.push("📝");
+
+  var left, right = "";
+  if (V.selecting && o.grp !== "done") {
+    left = '<span class="sq' + (t.sentAt ? " off" : (V.selected[t.id] ? " on" : "")) + '"></span>';
+  } else {
+    left = '<button class="chk' + (t.done ? " done" : "") + '" data-act="check" aria-label="完了"></button>';
+  }
+  if (t.sentAt) right += '<span class="sent">送信済</span>';
+  if (!V.selecting && o.grp === "undated") {
+    right += '<button class="mini" data-act="toToday">今日へ</button><button class="mini" data-act="toTomorrow">明日へ</button>';
+  }
+  if (!V.selecting && o.grp !== "done") {
+    right += '<button class="star' + (t.imp ? " on" : "") + '" data-act="star" aria-label="重要">' + (t.imp ? "★" : "☆") + "</button>";
+  }
+  return '<div class="row' + (t.imp && o.grp !== "done" ? " imp" : "") + (t.done ? " isdone" : "")
+    + '" data-id="' + esc(t.id) + '" data-grp="' + o.grp + '">' + left
+    + '<span class="dot" style="background:' + (cat ? cat.color : NONE_COLOR) + '"></span>'
+    + '<div class="t"><div class="ti">' + esc(t.title)
+    + (cat && V.cat === "" ? '<span class="tag">' + esc(cat.name) + "</span>" : "") + "</div>"
+    + (sub.length ? "<small>" + sub.join("・") + "</small>" : "") + "</div>" + right + "</div>";
+}
+
+// ── 入れる ───────────────────────────────────
+function addFromInput(pin) {
+  var box = el("addText");
+  var r = parseInput(box.value, S.cats.map(function (c) { return c.name; }), today());
+  var msg = el("addMsg");
+  msg.className = "";
+  if (!r.title) { msg.textContent = r.warnings.length ? r.warnings.join(" / ") : "題名を入れてください。"; return; }
+  var cat = "";
+  if (r.catName) S.cats.forEach(function (c) { if (c.name === r.catName) cat = c.id; });
+  else if (V.cat && V.cat !== "none") cat = V.cat;       // 絞っている種類があればそこへ
+  var due = r.due !== null ? r.due : (pin ? "" : V.day);
+  var t = makeTask({ title: r.title, due: due, cat: cat, imp: r.imp, order: nextOrder(due) }, new Date());
+  S.tasks.push(t);
+  saveAll();
+  box.value = "";
+  if (!due) V.undatedOpen = true;
+  render();
+  if (r.warnings.length) msg.textContent = "⚠️ " + r.warnings.join(" / ");
+  else {
+    msg.className = "ok";
+    msg.textContent = "✔ 入れました" + (due !== V.day ? "（" + (due ? shortDate(due) : "📌 期限なし") + "）" : "");
+    setTimeout(function () { if (msg.className === "ok") msg.textContent = ""; }, 2500);
+  }
+}
+function nextOrder(due) {
+  var m = 0;
+  S.tasks.forEach(function (t) { if (!t.done && t.due === due && t.order > m) m = t.order; });
+  return m + 10;
+}
+
+// ── 完了・元に戻す ──────────────────────────────
+var undoState = null;
+function doComplete(t) {
+  var next = completeTask(t, new Date());
+  if (next) { S.tasks.push(next); t.spawned = next.id; }
+  delete V.selected[t.id];      // 選んで送る途中に完了にしたものは送らない
+  touch(t);
+  saveAll();
+  render();
+  showUndo("✔「" + t.title + "」を完了にしました" + (next ? "（次の回：" + shortDate(next.due) + "）" : ""), t.id);
+}
+function undoComplete(id) {
+  var t = taskById(id);
+  if (!t) return;
+  t.done = false;
+  t.doneAt = "";
+  // 繰り返しで作った次の回は、まだ誰も触っていなければ消す（二重にしない）
+  if (t.spawned) {
+    var n = taskById(t.spawned);
+    if (n && !n.done && n.touchedAt === n.createdAt && !n.sentAt) {
+      S.tasks = S.tasks.filter(function (x) { return x.id !== n.id; });
+    }
+    delete t.spawned;
+  }
+  touch(t);
+  saveAll();
+  render();
+}
+function showUndo(text, id) {
+  if (undoState) clearTimeout(undoState.timer);
+  el("toastText").textContent = text;
+  show("toast", true);
+  undoState = { id: id, timer: setTimeout(function () { show("toast", false); undoState = null; }, 5000) };
+}
+
+// ── 一覧の押し分け ──────────────────────────────
+function onListClick(e) {
+  var act = e.target.closest("[data-act]");
+  var row = e.target.closest(".row");
+  if (dragJustEnded) { dragJustEnded = false; return; }
+  if (act) {
+    var a = act.getAttribute("data-act");
+    if (a === "impFold") { V.impOpen = !V.impOpen; render(); return; }
+    if (a === "undatedFold") { V.undatedOpen = !V.undatedOpen; render(); return; }
+    if (a === "doneFold") { V.doneOpen = !V.doneOpen; render(); return; }
+    if (a === "allToday") {
+      armOr("allToday", act, "もう一度押すと全部今日へ", function () {
+        var n = moveOverdueToToday(S.tasks, today(), nowIso());
+        saveAll(); render();
+        el("addMsg").className = "ok"; el("addMsg").textContent = "✔ " + n + "件を今日へ移しました";
+      });
+      return;
+    }
+    var t = row && taskById(row.getAttribute("data-id"));
+    if (!t) return;
+    if (a === "check") {
+      if (t.done) { undoComplete(t.id); return; }
+      doComplete(t);
+      return;
+    }
+    if (a === "star") { t.imp = !t.imp; touch(t); saveAll(); render(); return; }
+    if (a === "toToday" || a === "toTomorrow") {
+      t.due = a === "toToday" ? today() : addDays(today(), 1);
+      t.order = nextOrder(t.due);
+      touch(t); saveAll(); render();
+      el("addMsg").className = "ok"; el("addMsg").textContent = "✔「" + t.title + "」を" + shortDate(t.due) + "へ";
+      return;
+    }
+    return;
+  }
+  if (!row) return;
+  var tt = taskById(row.getAttribute("data-id"));
+  if (!tt) return;
+  if (V.selecting) {
+    if (row.getAttribute("data-grp") === "done" || tt.sentAt) return;   // 送信済は選べない
+    if (V.selected[tt.id]) delete V.selected[tt.id]; else V.selected[tt.id] = true;
+    render();
+    return;
+  }
+  openSheet(tt.id);
+}
+
+// ── 長押しで並べ替え（その日・期限なしの中だけ）─────────────
+var drag = null, dragJustEnded = false;
+function onPointerDown(e) {
+  var row = e.target.closest(".row");
+  if (!row || V.selecting || e.target.closest("[data-act]")) return;
+  var grp = row.getAttribute("data-grp");
+  if (grp !== "day" && grp !== "undated") return;
+  var startY = e.clientY, startX = e.clientX;
+  drag = { row: row, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
+    if (!drag) return;
+    drag.active = true;
+    row.classList.add("dragging");
+    if (navigator.vibrate) navigator.vibrate(15);
+  }, 450) };
+}
+function onPointerMove(e) {
+  if (!drag) return;
+  if (!drag.active) {
+    if (Math.abs(e.clientY - drag.startY) > 8 || Math.abs(e.clientX - drag.startX) > 8) { clearTimeout(drag.timer); drag = null; }
+    return;
+  }
+  e.preventDefault();
+  var box = drag.row.parentNode;
+  var rows = Array.prototype.filter.call(box.children, function (c) { return c.classList.contains("row") && c !== drag.row; });
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i].getBoundingClientRect();
+    if (e.clientY < r.top + r.height / 2) { box.insertBefore(drag.row, rows[i]); return; }
+  }
+  box.appendChild(drag.row);
+}
+function onPointerUp() {
+  if (!drag) return;
+  clearTimeout(drag.timer);
+  if (drag.active) {
+    var box = drag.row.parentNode;
+    var ids = Array.prototype.filter.call(box.children, function (c) { return c.classList.contains("row"); })
+      .map(function (c) { return c.getAttribute("data-id"); });
+    ids.forEach(function (id, i) { var t = taskById(id); if (t) { t.order = (i + 1) * 10; touch(t); } });
+    saveAll();
+    dragJustEnded = true;
+    setTimeout(function () { dragJustEnded = false; }, 400);
+    render();
+  }
+  drag = null;
+}
+// 🔴 並べ替え中だけ画面の上下の動きを止める（止めないと指と一緒に一覧が流れる）
+function onTouchMove(e) { if (drag && drag.active) e.preventDefault(); }
+
+// ── 選んで送る ─────────────────────────────────
+function renderSelCount() {
+  var n = Object.keys(V.selected).length;
+  el("selCount").textContent = n + "件を選択中";
+  el("selSend").disabled = !n || V.sending;
+}
+function sendSelected() {
+  var url = S.prefs.hookTask;
+  var msg = el("selMsg");
+  if (!looksLikeWebhook(url)) {
+    msg.className = "ng";
+    msg.textContent = "先に ⚙ 設定 で「Task Desk への送り先」を貼ってください。";
+    return;
+  }
+  var queue = S.tasks.filter(function (t) { return V.selected[t.id] && !t.sentAt && !t.done; });
+  if (!queue.length) return;
+  V.sending = true;
+  renderSelCount();
+  msg.className = "";
+  msg.textContent = "送っています…（" + queue.length + "件）";
+  var done = 0;
+  function step() {
+    if (done >= queue.length) {
+      V.sending = false;
+      V.selected = {};
+      V.selecting = false;
+      render();
+      el("addMsg").className = "ok";
+      el("addMsg").textContent = "✅ " + done + "件を Discord まで送りました。Task Desk に入るのは受け取り役（SD Bot）が動いているときです（止まっていても消えず、次に動かしたときに入ります）。";
+      return;
+    }
+    var t = queue[done];
+    var line = sendLine(t, S.cats);
+    // Discord は1通 2000字まで。超えると毎回断られ、後ろの行も送れなくなる（控えから入った長い題名など）
+    if (line.length > SEND_MAX_CHARS) { failSend("「" + t.title.slice(0, 20) + "…」の題名が長すぎて送れません（詳細で短くしてください）。", done); return; }
+    post(line, 0);
+  }
+  // 🔴 続けて送ると Discord の回数制限（429）に当たる＝言われた秒数だけ待って同じ1件を送り直す
+  function post(line, tries) {
+    var t = queue[done];
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content: line })
+    }).then(function (r) {
+      if (r.status === 429 && tries < SEND_RETRIES) {
+        return r.json().catch(function () { return {}; }).then(function (b) {
+          var sec = b && typeof b.retry_after === "number" ? b.retry_after : 2;
+          msg.textContent = "送っています…（混んでいるので " + Math.ceil(sec) + "秒待っています）";
+          setTimeout(function () { post(line, tries + 1); }, Math.min(Math.max(sec, 0.5), 30) * 1000);
+        });
+      }
+      if (!(r.ok || r.status === 204)) { failSend("送り先が受け取ってくれませんでした（" + r.status + "）。", done); return; }
+      // 🔴 1通＝1件なので、送れたその1件に**すぐ**印を付ける（途中で落ちたとき二重送りにしない）
+      t.sentAt = nowIso();
+      delete V.selected[t.id];
+      saveAll();
+      done += 1;
+      renderList();
+      msg.textContent = "送っています…（" + done + "/" + queue.length + " ✅）";
+      step();
+    }).catch(function () {
+      failSend("送れませんでした（電波が無いか、送り先が違います）。", done);
+    });
+  }
+  step();
+}
+function failSend(why, done) {
+  V.sending = false;
+  render();
+  var msg = el("selMsg");
+  msg.className = "ng";
+  msg.textContent = "⚠️ " + why + (done ? "（" + done + "件は送れました）" : "")
+    + " 送れなかった分は選んだまま残してあります。電波のある所でもう一度 📤 を押してください。";
+}
+
+// ── G 詳細 ───────────────────────────────────
+function openSheet(id) { V.sheetId = id; renderSheet(); show("sheet", true); show("sheetBack", true); }
+function closeSheet() {
+  var t = taskById(V.sheetId);
+  if (t && !String(t.title).trim()) t.title = UNTITLED;
+  V.sheetId = null;
+  show("sheet", false); show("sheetBack", false);
+  saveAll();
+  render();
+}
+function renderSheet() {
+  var t = taskById(V.sheetId);
+  if (!t) { closeSheet(); return; }
+  var r = t.repeat || { kind: "", value: 0 };
+  var h = [];
+  h.push('<div class="top"><b>✏ タスクの詳細</b><button class="btn fill" data-sh="close">閉じる</button></div>');
+  h.push('<div class="sh">題名</div><div style="padding:0 14px"><input class="sin" data-sh="title" maxlength="200" value="' + esc(t.title) + '"></div>');
+  h.push('<div class="sh">　</div><div class="sbox">');
+  h.push('<div class="srow"><span class="k">⭐ 重要（一覧のいちばん上に出す）</span><button class="tog' + (t.imp ? " on" : "") + '" data-sh="imp"></button></div>');
+  h.push('<div class="srow"><span class="k">期限</span><input type="date" data-sh="due" value="' + esc(t.due) + '" style="border:1px solid var(--line);border-radius:8px;padding:6px">'
+    + '<button class="btn" data-sh="noDue">なし</button></div>');
+  h.push('<div class="srow"><span class="k">種類</span><select data-sh="cat" style="padding:6px;border-radius:8px;border:1px solid var(--line)">'
+    + '<option value="">未分類</option>' + S.cats.map(function (c) {
+      return '<option value="' + esc(c.id) + '"' + (c.id === t.cat ? " selected" : "") + ">" + esc(c.name) + "</option>";
+    }).join("") + "</select></div>");
+  var valSel = "";
+  if (r.kind === "weekly") valSel = '<select data-sh="repVal" style="padding:6px;border-radius:8px;border:1px solid var(--line)">'
+    + WEEKDAY_JP.map(function (w, i) { return '<option value="' + i + '"' + (+r.value === i ? " selected" : "") + ">" + w + "曜</option>"; }).join("") + "</select>";
+  if (r.kind === "monthly") {
+    var opts = [];
+    for (var dd = 1; dd <= 31; dd++) opts.push('<option value="' + dd + '"' + (+r.value === dd ? " selected" : "") + ">" + dd + "日</option>");
+    valSel = '<select data-sh="repVal" style="padding:6px;border-radius:8px;border:1px solid var(--line)">' + opts.join("") + "</select>";
+  }
+  h.push('<div class="srow"><span class="k">繰り返し</span><select data-sh="repKind" style="padding:6px;border-radius:8px;border:1px solid var(--line)">'
+    + ["", "daily", "weekly", "monthly"].map(function (k) {
+      return '<option value="' + k + '"' + (r.kind === k ? " selected" : "") + ">" + REPEAT_LABEL[k] + "</option>";
+    }).join("") + "</select>" + valSel + "</div>");
+  h.push("</div>");
+  if (r.kind && !t.due) h.push('<div class="smsg ng">繰り返しには期限が要ります（期限なしのままだと、完了したとき今日から数えます）。</div>');
+  // 小項目
+  h.push('<div class="sh">小項目</div><div class="sbox">');
+  t.subs.forEach(function (s, i) {
+    h.push('<div class="subrow"><button class="chk' + (s.done ? " done" : "") + '" data-sh="subChk" data-i="' + i + '"></button><span>'
+      + esc(s.t) + '</span><button class="x" data-sh="subDel" data-i="' + i + '">✕</button></div>');
+  });
+  h.push('<div class="srow"><input class="sin" data-sh="subNew" placeholder="小項目を足す（打って Enter）" enterkeyhint="done"></div></div>');
+  h.push('<div class="sh">メモ</div><div style="padding:0 14px"><textarea data-sh="note" placeholder="（Task Desk へは送られません）">' + esc(t.note) + "</textarea></div>");
+  // 送信済
+  if (t.sentAt) {
+    var sd = new Date(t.sentAt);
+    h.push('<div class="sh">Task Desk</div><div class="sbox"><div class="srow"><span class="k">送信済（' + (sd.getMonth() + 1) + "/" + sd.getDate()
+      + '）</span><button class="btn" data-sh="resend">もう一度送れるようにする</button></div></div>');
+  }
+  h.push('<div style="padding:22px 14px 8px;text-align:center"><button class="btn ng" data-sh="del">🗑 このタスクを消す</button></div>');
+  el("sheet").innerHTML = h.join("");
+}
+function onSheetInput(e) {
+  var t = taskById(V.sheetId);
+  if (!t) return;
+  var k = e.target.getAttribute("data-sh");
+  // 🔴 空のまま保存しない（閉じる前にアプリが終わると空の題名が残り、控えが丸ごと取り込めなくなる）
+  if (k === "title") { t.title = e.target.value.trim() ? e.target.value : UNTITLED; touch(t); saveAll(); }
+  if (k === "note") { t.note = e.target.value; touch(t); saveAll(); }
+}
+function onSheetChange(e) {
+  var t = taskById(V.sheetId);
+  if (!t) return;
+  var k = e.target.getAttribute("data-sh");
+  if (k === "due") { t.due = e.target.value || ""; t.order = nextOrder(t.due); }
+  else if (k === "cat") t.cat = e.target.value;
+  else if (k === "repKind") {
+    var kind = e.target.value;
+    var base = t.due || today();
+    t.repeat = { kind: kind, value: kind === "weekly" ? weekdayOf(base) : kind === "monthly" ? toDate(base).getDate() : 0 };
+  } else if (k === "repVal") t.repeat.value = +e.target.value;
+  else return;
+  touch(t); saveAll(); renderSheet();
+}
+function onSheetKey(e) {
+  if (e.key !== "Enter" || e.target.getAttribute("data-sh") !== "subNew") return;
+  e.preventDefault();
+  var t = taskById(V.sheetId);
+  var v = e.target.value.trim();
+  if (!t || !v) return;
+  t.subs.push({ t: v, done: false });
+  touch(t); saveAll(); renderSheet();
+  var nb = document.querySelector('[data-sh="subNew"]');
+  if (nb) nb.focus();
+}
+function onSheetClick(e) {
+  var b = e.target.closest("[data-sh]");
+  if (!b) return;
+  var t = taskById(V.sheetId);
+  var k = b.getAttribute("data-sh");
+  if (k === "close") { closeSheet(); return; }
+  if (!t) return;
+  if (k === "imp") { t.imp = !t.imp; }
+  else if (k === "noDue") { t.due = ""; t.order = nextOrder(""); }
+  else if (k === "subChk") { var s = t.subs[+b.getAttribute("data-i")]; s.done = !s.done; }
+  else if (k === "subDel") { t.subs.splice(+b.getAttribute("data-i"), 1); }
+  else if (k === "resend") { t.sentAt = ""; }
+  else if (k === "del") {
+    armOr("del", b, "もう一度押すと消します", function () {
+      S.tasks = S.tasks.filter(function (x) { return x.id !== t.id; });
+      V.sheetId = null;
+      show("sheet", false); show("sheetBack", false);
+      saveAll(); render();
+      el("addMsg").className = "ok"; el("addMsg").textContent = "🗑「" + t.title + "」を消しました";
+    });
+    return;
+  } else return;
+  touch(t); saveAll(); renderSheet();
+}
+
+// ── 月のカレンダー ──────────────────────────────
+function renderCal() {
+  if (!V.calY) { var d = toDate(V.day); V.calY = d.getFullYear(); V.calM = d.getMonth() + 1; }
+  el("calTitle").textContent = V.calY + "年" + V.calM + "月";
+  var td = today();
+  var head = weekDays("2026-09-21", S.prefs.weekStart).map(function (day) { return '<div class="cw">' + WEEKDAY_JP[weekdayOf(day)] + "</div>"; });
+  var cells = monthCells(V.calY, V.calM, S.prefs.weekStart).map(function (day) {
+    var info = dayInfo(S.tasks, day);
+    var other = toDate(day).getMonth() + 1 !== V.calM;
+    return '<button class="cc' + (other ? " other" : "") + (day === td ? " today" : "") + (day === V.day ? " on" : "")
+      + '" data-day="' + day + '">' + toDate(day).getDate()
+      + "<em>" + (info.imp ? "⭐" : "") + (info.n ? info.n + "件" : "") + "</em></button>";
+  });
+  el("calGrid").innerHTML = head.concat(cells).join("");
+}
+function shiftMonth(n) {
+  V.calM += n;
+  if (V.calM < 1) { V.calM = 12; V.calY -= 1; }
+  if (V.calM > 12) { V.calM = 1; V.calY += 1; }
+  renderCal();
+}
+
+// ── 設定 ─────────────────────────────────────
+var setMsg = { cat: "", hook: "", backup: "", badge: "" };
+function msgHtml(m) { return m ? '<div class="smsg' + (m.charAt(0) === "⚠" ? " ng" : "") + '">' + esc(m) + "</div>" : ""; }
+function renderSettings() {
+  var h = [];
+  // 種類
+  h.push('<div class="sh">種類（Task Desk のカテゴリと同じ名前にすると、送るだけで振り分けられます）</div><div class="sbox">');
+  S.cats.forEach(function (c) {
+    if (V.editCat === c.id) h.push(catEditHtml(c));
+    else h.push('<div class="srow"><span class="dot" style="background:' + c.color + '"></span><span class="k">' + esc(c.name)
+      + '</span><button class="btn" data-set="editCat" data-id="' + esc(c.id) + '">✏ 直す</button></div>');
+  });
+  if (V.editCat === "new") h.push(catEditHtml({ id: "new", name: "", color: CAT_COLORS[S.cats.length % CAT_COLORS.length] }));
+  else h.push('<div class="srow"><button class="btn" data-set="addCat">＋ 種類を足す</button></div>');
+  h.push("</div>" + msgHtml(setMsg.cat));
+
+  // 送り先
+  h.push('<div class="sh">送り先（Discord のウェブフック）</div><div class="sbox">');
+  h.push(hookRowHtml("hookTask", "Task Desk へ（#タスク）"));
+  h.push(hookRowHtml("hookBackup", "控えを送る（#タスク控え）"));
+  h.push("</div>" + msgHtml(setMsg.hook));
+
+  // 控え
+  var lb = S.prefs.lastBackup;
+  h.push('<div class="sh">控え（データはこの iPhone の中だけにあります）</div><div class="sbox">');
+  h.push('<div class="srow"><span class="k">最後に書き出した日</span><span class="v">'
+    + (lb ? shortDate(lb) + "（" + daysBetween(lb, today()) + "日前）" : "まだ一度もありません") + "</span></div>");
+  h.push('<div class="srow"><span class="k">📤 控えを Discord へ送る<br><small style="color:var(--muted)">PC に保存され、毎朝のバックアップにも入ります</small></span><button class="btn fill" data-set="backupSend">送る</button></div>');
+  h.push('<div class="srow"><span class="k">💾 控えをファイルにする</span><button class="btn" data-set="backupFile">書き出す</button></div>');
+  h.push('<div class="srow"><span class="k">📥 控えを取り込む<br><small style="color:var(--muted)">今のデータと置き換えます</small></span><button class="btn ng" data-set="import">選ぶ</button></div>');
+  h.push("</div>" + msgHtml(setMsg.backup));
+
+  // 表示
+  h.push('<div class="sh">表示</div><div class="sbox">');
+  h.push('<div class="srow"><span class="k">週の始まり</span><select data-set="weekStart" style="padding:6px;border-radius:8px;border:1px solid var(--line)">'
+    + '<option value="mon"' + (S.prefs.weekStart !== "sun" ? " selected" : "") + '>月曜</option><option value="sun"'
+    + (S.prefs.weekStart === "sun" ? " selected" : "") + ">日曜</option></select></div>");
+  h.push('<div class="srow"><span class="k">アイコンに数字を出す<br><small style="color:var(--muted)">今日＋期限切れの残り。開いたときに数え直します</small></span><button class="tog'
+    + (S.prefs.badge ? " on" : "") + '" data-set="badge"></button></div>');
+  h.push("</div>" + msgHtml(setMsg.badge));
+
+  h.push('<div class="foot"><span id="offMsg"></span><br>繰り返し・小項目・メモは iPhone の中だけで使います（Task Desk へは送られません）。</div>');
+  el("setView").innerHTML = h.join("");
+  paintOffline();
+}
+function catEditHtml(c) {
+  return '<div class="catedit" data-id="' + esc(c.id) + '"><input class="sin" id="catName" value="' + esc(c.name) + '" placeholder="種類の名前（Task Desk と同じに）">'
+    + '<div class="swatches">' + CAT_COLORS.map(function (col) {
+      return '<button class="sw' + (col === c.color ? " on" : "") + '" data-set="catColor" data-color="' + col + '" style="background:' + col + '"></button>';
+    }).join("") + "</div>"
+    + '<div style="display:flex;gap:8px"><button class="btn fill" data-set="catSave">保存</button><button class="btn" data-set="catCancel">やめる</button>'
+    + (c.id !== "new" ? '<span style="flex:1"></span><button class="btn ng" data-set="catDel">🗑 消す</button>' : "") + "</div></div>";
+}
+function hookRowHtml(key, label) {
+  var set = looksLikeWebhook(S.prefs[key]);
+  return '<div class="srow" style="flex-wrap:wrap"><span class="k">' + label + '</span><span class="v">' + (set ? "✅ 設定済み" : "未設定") + "</span>"
+    + '<div style="display:flex;gap:8px;width:100%"><input class="sin" id="in_' + key + '" placeholder="https://discord.com/api/webhooks/…" style="flex:1">'
+    + '<button class="btn" data-set="hookSave" data-key="' + key + '">貼る</button>'
+    + (set ? '<button class="btn ng" data-set="hookClear" data-key="' + key + '">消す</button>' : "") + "</div></div>";
+}
+var editColor = null;
+function onSetClick(e) {
+  var b = e.target.closest("[data-set]");
+  if (!b) return;
+  var k = b.getAttribute("data-set");
+  if (k === "editCat") { V.editCat = b.getAttribute("data-id"); editColor = null; setMsg.cat = ""; renderSettings(); return; }
+  if (k === "addCat") { V.editCat = "new"; editColor = null; setMsg.cat = ""; renderSettings(); return; }
+  if (k === "catCancel") { V.editCat = null; renderSettings(); return; }
+  if (k === "catColor") {
+    editColor = b.getAttribute("data-color");
+    Array.prototype.forEach.call(document.querySelectorAll(".sw"), function (s) { s.classList.toggle("on", s === b); });
+    return;
+  }
+  if (k === "catSave") {
+    var name = el("catName").value.trim();
+    var selfId = V.editCat === "new" ? "" : V.editCat;
+    var why = catNameProblem(name, S.cats, selfId);
+    if (why) { setMsg.cat = "⚠️ " + why; renderSettingsKeepEdit(name); return; }
+    if (V.editCat === "new") {
+      S.cats.push({ id: "c" + Date.now().toString(36), name: name, color: editColor || CAT_COLORS[S.cats.length % CAT_COLORS.length] });
+    } else {
+      var c = findCat(S.cats, V.editCat);
+      c.name = name;
+      if (editColor) c.color = editColor;
+    }
+    V.editCat = null;
+    setMsg.cat = "✔ 保存しました。Task Desk 側のカテゴリ名と同じか確かめてください（違うと未分類で届きます）。";
+    saveAll(); renderSettings(); return;
+  }
+  if (k === "catDel") {
+    var id = V.editCat;
+    var n = S.tasks.filter(function (t) { return t.cat === id; }).length;
+    armOr("catDel", b, n ? "もう一度押すと消す（" + n + "件は未分類へ）" : "もう一度押すと消す", function () {
+      S.tasks.forEach(function (t) { if (t.cat === id) { t.cat = ""; } });
+      S.cats = S.cats.filter(function (c) { return c.id !== id; });
+      if (V.cat === id) V.cat = "";
+      V.editCat = null;
+      setMsg.cat = "🗑 種類を消しました" + (n ? "（" + n + "件は未分類になりました）" : "");
+      saveAll(); renderSettings();
+    });
+    return;
+  }
+  if (k === "hookSave") {
+    var key = b.getAttribute("data-key");
+    var u = el("in_" + key).value.trim();
+    if (!looksLikeWebhook(u)) { setMsg.hook = "⚠️ 形が違うようです（https://discord.com/api/webhooks/… の形）。"; renderSettings(); return; }
+    var other = key === "hookTask" ? "hookBackup" : "hookTask";
+    // 🔴 同じ送り先を2つに貼ると、控え（JSON）がタスクとして #タスク に流れる
+    if (u === S.prefs[other]) { setMsg.hook = "⚠️ もう片方と同じ送り先です。#タスク と #タスク控え は別のウェブフックにしてください。"; renderSettings(); return; }
+    S.prefs[key] = u;
+    setMsg.hook = "✔ 貼りました。";
+    saveAll(); renderSettings(); return;
+  }
+  if (k === "hookClear") {
+    var kk = b.getAttribute("data-key");
+    armOr("hookClear" + kk, b, "もう一度押すと消す", function () {
+      delete S.prefs[kk]; setMsg.hook = "送り先を消しました。"; saveAll(); renderSettings();
+    });
+    return;
+  }
+  if (k === "backupSend") { sendBackup(b); return; }
+  if (k === "backupFile") { saveBackupFile(); return; }
+  if (k === "import") { el("importFile").value = ""; el("importFile").click(); return; }
+  if (k === "badge") { toggleBadge(); return; }
+}
+function renderSettingsKeepEdit(name) { renderSettings(); if (el("catName")) el("catName").value = name; }
+function onSetChange(e) {
+  if (e.target.getAttribute("data-set") === "weekStart") { S.prefs.weekStart = e.target.value; saveAll(); renderSettings(); }
+}
+
+function backupText() { return JSON.stringify(exportData(S.tasks, S.cats, S.prefs, new Date()), null, 1); }
+function backupName() {
+  var d = new Date();
+  return "todo_" + ymd(d).replace(/-/g, "") + "_" + pad2(d.getHours()) + pad2(d.getMinutes()) + ".json";
+}
+function markBackedUp(text) {
+  S.prefs.lastBackup = today();
+  setMsg.backup = text;
+  saveAll();
+  if (V.tab === "set") renderSettings();
+}
+function sendBackup(btn) {
+  var url = S.prefs.hookBackup;
+  if (!looksLikeWebhook(url)) { setMsg.backup = "⚠️ 先に上の「控えを送る（#タスク控え）」の送り先を貼ってください。"; renderSettings(); return; }
+  var fd = new FormData();
+  fd.append("payload_json", JSON.stringify({ content: "📱 タスクの控え（" + S.tasks.length + "件）" }));
+  fd.append("files[0]", new Blob([backupText()], { type: "application/json" }), backupName());
+  btn.disabled = true;
+  btn.textContent = "送っています…";
+  fetch(url, { method: "POST", body: fd }).then(function (r) {
+    if (!r.ok) throw new Error(String(r.status));
+    markBackedUp("✅ 控えを Discord へ送りました（" + S.tasks.length + "件）。PC への保存は受け取り役（SD Bot）が動いているときです。");
+  }).catch(function (err) {
+    setMsg.backup = "⚠️ 送れませんでした（" + (err && err.message ? err.message : "電波が無いか、送り先が違います") + "）。";
+    renderSettings();
+  });
+}
+function saveBackupFile() {
+  var text = backupText(), name = backupName();
+  var file = null;
+  try { file = new File([text], name, { type: "application/json" }); } catch (e) { file = null; }
+  // iPhone は「共有」から「ファイルに保存」できる。使えなければダウンロード
+  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
+    navigator.share({ files: [file] }).then(function () {
+      markBackedUp("✅ 控えを書き出しました（" + name + "）。");
+    }).catch(function (err) {
+      if (err && err.name === "AbortError") { setMsg.backup = "書き出しをやめました（控えの日付は変えていません）。"; renderSettings(); return; }
+      setMsg.backup = "⚠️ 書き出せませんでした（" + (err && err.message ? err.message : "理由不明") + "）。"; renderSettings();
+    });
+    return;
+  }
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(new Blob([text], { type: "application/json" }));
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  markBackedUp("✅ 控えを書き出しました（" + name + "）。");
+}
+var pendingImport = null;
+function onImportFile(e) {
+  var f = e.target.files && e.target.files[0];
+  if (!f) return;
+  var rd = new FileReader();
+  rd.onload = function () {
+    var obj = null;
+    try { obj = JSON.parse(String(rd.result)); } catch (err) { obj = null; }
+    var chk = checkImport(obj);
+    if (!chk.ok) { setMsg.backup = "⚠️ 取り込めません：" + chk.why + "（今のデータはそのままです）"; renderSettings(); return; }
+    pendingImport = chk.data;
+    renderSettings();
+    var btn = document.querySelector('[data-set="import"]');
+    setMsg.backup = "";
+    armed = {};
+    // 🔴 置き換える前に件数を見せて、もう一度押させる
+    btn.textContent = "置き換える（" + chk.data.tasks.length + "件）";
+    btn.classList.add("armed");
+    btn.setAttribute("data-set", "importGo");
+    var m = document.createElement("div");
+    m.className = "smsg ng";
+    m.textContent = "⚠️ 今の " + S.tasks.length + "件・種類" + S.cats.length + "個を、控えの " + chk.data.tasks.length + "件・種類"
+      + chk.data.cats.length + "個（" + (isNaN(new Date(chk.data.exportedAt).getTime()) ? "日付不明" : ymd(new Date(chk.data.exportedAt))) + " の控え）で置き換えます。よければもう一度押してください。";
+    btn.closest(".sbox").after(m);
+  };
+  rd.readAsText(f);
+}
+function doImport() {
+  if (!pendingImport) return;
+  // 🔴 置き換える前に今の全件を写しておく（2度押しの確認だけでは、押し間違えたときに戻せない）
+  try {
+    localStorage.setItem(KEYS.beforeImport, JSON.stringify({ at: nowIso(), tasks: S.tasks, cats: S.cats }));
+  } catch (e) {
+    setMsg.backup = "⚠️ 今のデータを写せなかったので取り込みを止めました（空き容量を確かめてください）。";
+    pendingImport = null; renderSettings(); return;
+  }
+  S.tasks = pendingImport.tasks;
+  S.cats = pendingImport.cats;
+  S.prefs.weekStart = pendingImport.prefs && pendingImport.prefs.weekStart || S.prefs.weekStart;
+  pendingImport = null;
+  V.cat = "";
+  setMsg.backup = "✅ 控えから戻しました（" + S.tasks.length + "件）。";
+  saveAll(); renderSettings();
+}
+function toggleBadge() {
+  if (S.prefs.badge) { S.prefs.badge = false; setMsg.badge = ""; saveAll(); updateBadgeOff(); renderSettings(); return; }
+  if (!("setAppBadge" in navigator)) {
+    setMsg.badge = "⚠️ ここでは使えません（ホーム画面のアイコンから開いたときだけ使えます）。"; renderSettings(); return;
+  }
+  var ask = window.Notification && Notification.permission === "default" ? Notification.requestPermission() : Promise.resolve(window.Notification ? Notification.permission : "granted");
+  ask.then(function (p) {
+    if (p === "denied") { setMsg.badge = "⚠️ 通知が許可されていないので数字を出せません（iPhone の設定 → 通知 → タスク）。"; renderSettings(); return; }
+    S.prefs.badge = true;
+    setMsg.badge = "✔ アイコンに数字を出します（開いたときに数え直します）。";
+    saveAll(); renderSettings();
+  });
+}
+function updateBadgeOff() { if ("clearAppBadge" in navigator) { var p = navigator.clearAppBadge(); if (p && p.catch) p.catch(function () {}); } }
+
+// ── 電波なしで開けるか（計算機と同じ仕組み）──────────────
+var offState = "";
+function paintOffline() { if (el("offMsg")) el("offMsg").textContent = offState; }
+function setupOffline() {
+  if (location.protocol !== "http:" && location.protocol !== "https:") { offState = "（電波なしで開けるかは、ネット上のアドレスから開くと出ます）"; return; }
+  if (!("serviceWorker" in navigator) || !window.caches) { offState = "⚠️ このブラウザでは控えを作れません（電波が要ります）"; return; }
+  var tries = 0;
+  function look() {
+    tries++;
+    caches.match("./__offline_ok").then(function (hit) {
+      if (hit) return hit.json().then(function (info) {
+        offState = "✅ 電波が無くても開けます（" + (info && info.cache ? info.cache : "") + "）"; paintOffline();
+      });
+      if (tries < 12) { setTimeout(look, 900); return; }
+      offState = "⚠️ 電波なし用の控えがまだできていません。電波のある所でもう一度開いてください"; paintOffline();
+    }).catch(function () { offState = "⚠️ 電波なし用の控えの状態を確かめられませんでした"; paintOffline(); });
+  }
+  offState = "⏳ 電波が無くても開けるように準備しています…";
+  navigator.serviceWorker.register("./sw.js").then(look).catch(function (err) {
+    offState = "⚠️ 電波なし用の控えが作れませんでした（" + (err && err.message ? err.message : "理由不明") + "）"; paintOffline();
+  });
+}
+
+// ── 週の帯を指で左右にめくる ─────────────────────────
+var swipeX = null;
+function onStripTouchStart(e) { swipeX = e.touches[0].clientX; }
+function onStripTouchEnd(e) {
+  if (swipeX === null) return;
+  var dx = e.changedTouches[0].clientX - swipeX;
+  swipeX = null;
+  if (Math.abs(dx) > 50) { V.day = addDays(V.day, dx < 0 ? 7 : -7); render(); }
+}
+
+// ── 始める ───────────────────────────────────
+function start() {
+  loadAll();
+  var kept = pruneDone(S.tasks, today());           // 完了から90日たったものを片付ける
+  if (kept.length !== S.tasks.length) { S.tasks = kept; saveAll(); }
+  V.day = today();
+
+  el("addForm").addEventListener("submit", function (e) { e.preventDefault(); addFromInput(false); });
+  el("addPin").addEventListener("click", function () { addFromInput(true); });
+  el("groups").addEventListener("click", onListClick);
+  el("groups").addEventListener("pointerdown", onPointerDown);
+  document.addEventListener("pointermove", onPointerMove, { passive: false });
+  document.addEventListener("pointerup", onPointerUp);
+  document.addEventListener("pointercancel", onPointerUp);
+  document.addEventListener("touchmove", onTouchMove, { passive: false });
+  el("groups").addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  el("days").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); render(); }
+  });
+  el("strip").addEventListener("touchstart", onStripTouchStart, { passive: true });
+  el("strip").addEventListener("touchend", onStripTouchEnd);
+  el("wkPrev").addEventListener("click", function () { V.day = addDays(V.day, -7); render(); });
+  el("wkNext").addEventListener("click", function () { V.day = addDays(V.day, 7); render(); });
+  el("filt").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-cat]"); if (b) { V.cat = b.getAttribute("data-cat"); render(); }
+  });
+  el("goToday").addEventListener("click", function () { V.day = today(); V.calY = 0; if (V.tab === "cal") V.tab = "list"; render(); });
+  el("selToggle").addEventListener("click", function () {
+    V.selecting = !V.selecting; V.selected = {};
+    el("selMsg").className = "";
+    el("selMsg").textContent = "※ 送るのは題名・期限・種類・重要まで。繰り返し・小項目・メモは送られません。送信済（灰色）は選べません。";
+    render();
+  });
+  el("selCancel").addEventListener("click", function () { V.selecting = false; V.selected = {}; render(); });
+  el("selSend").addEventListener("click", sendSelected);
+  el("tabs").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-tab]"); if (!b) return;
+    V.tab = b.getAttribute("data-tab");
+    if (V.tab !== "list") { V.selecting = false; V.selected = {}; }
+    if (V.tab === "cal") V.calY = 0;
+    V.editCat = null;
+    // 前に開いたときの知らせを持ち越さない（別の操作の警告が残って紛らわしいため）
+    setMsg = { cat: "", hook: "", backup: "", badge: "" };
+    pendingImport = null;
+    render();
+  });
+  el("calPrev").addEventListener("click", function () { shiftMonth(-1); });
+  el("calNext").addEventListener("click", function () { shiftMonth(1); });
+  el("calGrid").addEventListener("click", function (e) {
+    var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); V.tab = "list"; render(); }
+  });
+  el("setView").addEventListener("click", function (e) {
+    var b = e.target.closest('[data-set="importGo"]');
+    if (b) { doImport(); return; }
+    onSetClick(e);
+  });
+  el("setView").addEventListener("change", onSetChange);
+  el("importFile").addEventListener("change", onImportFile);
+  el("sheet").addEventListener("click", onSheetClick);
+  el("sheet").addEventListener("input", onSheetInput);
+  el("sheet").addEventListener("change", onSheetChange);
+  el("sheet").addEventListener("keydown", onSheetKey);
+  el("sheetBack").addEventListener("click", closeSheet);
+  el("toastUndo").addEventListener("click", function () {
+    if (!undoState) return;
+    clearTimeout(undoState.timer);
+    var id = undoState.id; undoState = null;
+    show("toast", false);
+    undoComplete(id);
+  });
+  // 🔴 日付が変わってから開き直したとき（閉じずに翌日）も「今日」と数字を数え直す
+  document.addEventListener("visibilitychange", function () {
+    if (document.visibilityState !== "visible") return;
+    if (V.lastSeen && V.lastSeen !== today() && V.day === V.lastSeen) V.day = today();
+    V.lastSeen = today();
+    render(); updateBadge();
+  });
+  V.lastSeen = today();
+  render();
+  updateBadge();
+}
+
+start();
+setupOffline();
+</script>
+</body>
+</html>
