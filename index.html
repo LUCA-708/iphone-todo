@@ -726,7 +726,7 @@ function render() {
   el("hdrTitle").innerHTML = V.tab === "list"
     ? esc((d.getMonth() + 1) + "月" + d.getDate() + "日（" + WEEKDAY_JP[weekdayOf(V.day)] + "）") + (V.day === td ? "<small>今日</small>" : "")
     : V.tab === "cal" ? "カレンダー" : "設定";
-  show("goToday", V.tab !== "set" && (V.day !== td || V.tab === "cal"));
+  paintTodayBtn();
   show("selToggle", V.tab === "list");
   el("selToggle").classList.toggle("on", V.selecting);
   el("selToggle").textContent = V.selecting ? "✕ やめる" : "📤 選ぶ";   // 短く＝大きくした日付が切れないように
@@ -1238,11 +1238,21 @@ function onSheetClick(e) {
 }
 
 // ── 月のカレンダー ──────────────────────────────
+/** 右上の戻るボタン。一覧＝「今日」（今日以外を見ているときだけ）／カレンダー＝「今月」（今月以外を見ているときだけ）
+ *  🔴 カレンダーは月をめくるたびに出す・隠すが変わる＝renderCal からも呼ぶ（render だけだとめくった後に古いまま） */
+function paintTodayBtn() {
+  var td = today(), d = toDate(td);
+  var onCal = V.tab === "cal";
+  el("goToday").textContent = onCal ? "今月" : "今日";
+  var away = onCal ? (V.calY && (V.calY !== d.getFullYear() || V.calM !== d.getMonth() + 1)) : V.day !== td;
+  show("goToday", V.tab !== "set" && !!away);
+}
 function renderCal() {
   if (!V.calY) { var d = toDate(V.day); V.calY = d.getFullYear(); V.calM = d.getMonth() + 1; }
   el("calTitle").textContent = V.calY + "年" + V.calM + "月";
   el("calGrid").innerHTML = calHtml(V.calY, V.calM);
   fitToBottom(el("calView"));
+  paintTodayBtn();
 }
 // y年m月のマス。めくるときに前後の月も描くので文字列で返す
 function calHtml(y, m) {
@@ -1404,6 +1414,13 @@ function stepWeek(n) {
   var to = addDays(V.day, 7 * n);
   listPager.slide(n, groupsHtml(to), function () {});
   stripPager.slide(n, weekHtml(to), function () { V.day = to; render(); });
+}
+/** カレンダーの「今月」：見ている月から今月へ、向きに合わせて滑らせて戻る */
+function backToThisMonth() {
+  var d = toDate(today()), y = d.getFullYear(), m = d.getMonth() + 1;
+  var diff = (y - V.calY) * 12 + (m - V.calM);
+  if (!diff) return;
+  calPager.slide(diff > 0 ? 1 : -1, calHtml(y, m), function () { V.calY = y; V.calM = m; renderCal(); });
 }
 function stepMonth(n) {
   var t = addMonth(V.calY, V.calM, n);
@@ -1693,7 +1710,10 @@ function start() {
   el("filt").addEventListener("click", function (e) {
     var b = e.target.closest("[data-cat]"); if (b) { V.cat = b.getAttribute("data-cat"); render(); }
   });
-  el("goToday").addEventListener("click", function () { V.day = today(); V.calY = 0; if (V.tab === "cal") V.tab = "list"; render(); });
+  el("goToday").addEventListener("click", function () {
+    if (V.tab === "cal") { backToThisMonth(); return; }   // カレンダー＝「今月」＝カレンダーのまま今月へ（2026-09-27 ユーザー決定 A）
+    V.day = today(); V.calY = 0; render();
+  });
   el("selToggle").addEventListener("click", function () {
     V.selecting = !V.selecting; V.selected = {};
     el("selMsg").className = "";
