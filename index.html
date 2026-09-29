@@ -77,11 +77,28 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .f.on{background:var(--ink);color:#fff}
 .f i{width:9px;height:9px;border-radius:50%;display:inline-block}
 
-/* C 入力欄 */
-#addForm{display:flex;gap:6px;padding:8px 12px}
-#addText{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px}
-#addPin{flex:none;width:46px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:18px}
-#addGo{flex:none;width:50px;border-radius:12px;background:var(--acc);color:#fff;font-size:24px}
+/* C ＋ 入れる（右下の丸・下から出るシート・2026-09-30 上の入力欄の代わり） */
+#fab{position:fixed;right:max(16px,calc(50vw - 260px + 16px));bottom:calc(72px + env(safe-area-inset-bottom));width:44px;height:44px;border-radius:50%;background:var(--acc);color:#fff;font-size:28px;line-height:44px;text-align:center;box-shadow:0 3px 10px rgba(0,0,0,.28);z-index:22}
+/* ＋と一番下の行の☆が重ならないように、一覧の下に＋の分を空ける／「元に戻す」の帯は＋の横まで */
+#dayGroups,#catList{padding-bottom:56px}
+body.hasfab #toast{left:max(12px,calc(50vw - 260px + 12px));right:max(68px,calc(50vw - 260px + 68px));max-width:none;margin:0}
+#addSheet{position:fixed;left:0;right:0;bottom:0;max-width:520px;margin:0 auto;max-height:88vh;overflow-y:auto;background:var(--bg);border-radius:16px 16px 0 0;z-index:31;padding:12px 12px calc(12px + env(safe-area-inset-bottom));box-shadow:0 -4px 18px rgba(0,0,0,.15)}
+#addText{width:100%;padding:11px 12px;border:2px solid var(--acc);border-radius:12px;background:var(--card);font-size:16px}
+.alb{font-size:12px;font-weight:bold;color:var(--muted);margin:10px 2px 4px}
+.apills{display:flex;flex-wrap:wrap;gap:6px}
+.ap{position:relative;display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:16px;padding:6px 12px;font-size:16px;background:var(--card);white-space:nowrap;overflow:hidden}
+.ap i{width:9px;height:9px;border-radius:50%;display:inline-block}
+.ap.on{background:var(--acc);border-color:var(--acc);color:#fff}
+.ap.apimp.on{background:var(--star);border-color:var(--star)}
+.ap.off{opacity:.45}
+/* 日付の札＝上に透明の日付欄を重ねる（押すと iPhone の日付選びが出る） */
+.ap input[type=date]{position:absolute;inset:0;opacity:0;width:100%;height:100%;font-size:16px}
+#addSheetMsg{font-size:14px;color:var(--ng);min-height:20px;margin:8px 2px 0;line-height:1.5}
+#addSheetMsg.ok{color:var(--acc)}
+#addSheet .go{display:flex;gap:8px;margin-top:6px}
+#addSheet .go button{flex:1;padding:12px;border-radius:12px;font-weight:bold;font-size:16px}
+#addClose{background:var(--bg2)}
+#addGo{background:var(--acc);color:#fff}
 #addMsg{margin:0 14px 4px;font-size:13px;color:var(--ng);line-height:1.5}
 #addMsg.ok{color:var(--acc)}
 
@@ -91,9 +108,12 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .gh.late{color:var(--ng);background:var(--ng-soft)}
 .gh.imphead{color:#fff;background:var(--star);border-color:var(--star);font-size:16px;padding:9px 14px}
 .gh.fold{cursor:pointer;color:var(--muted)}
+/* 重要を畳む・開く（一番下の横長・2026-09-30） */
+.impmore{display:block;width:100%;padding:11px;background:#FFF1CC;color:#8A5C00;font-weight:bold;font-size:15px;border-bottom:1px solid var(--line)}
 .gbtn{font-size:12px;border-radius:8px;padding:3px 8px;background:var(--card);border:1px solid currentColor;font-weight:bold}
 .row{display:flex;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line);background:var(--card);user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
 .row.imp{background:#FFF8E6}   /* 左の縁は外した（見出し・背景・★で足りる・2026-09-27 ユーザー決定） */
+.row.pressing{background:var(--acc-soft);box-shadow:inset 0 0 0 2px var(--acc)}   /* 長押しでメニューが出る合図（並べ替えできない行） */
 .row.dragging{box-shadow:0 6px 18px rgba(0,0,0,.18);position:relative;z-index:5;background:#fff}
 .chk{flex:none;width:26px;height:26px;border:2px solid #B8B5AC;border-radius:50%}
 .chk.done{background:var(--acc);border-color:var(--acc);position:relative}
@@ -147,9 +167,6 @@ input,select,textarea{font:inherit;font-size:16px;color:var(--ink)}
 .ct small{color:var(--muted);font-weight:bold;font-size:12px}
 .ct.on{background:var(--ink);color:#fff;border-color:var(--ink)}.ct.on small{color:#ddd}
 .ct em{width:7px;height:7px;border-radius:50%;background:var(--ng);display:inline-block}
-#catAddForm{display:flex;gap:6px;padding:8px 12px}
-#catAddText{flex:1;min-width:0;padding:11px 12px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:16px}
-#catAddGo{flex:none;width:50px;border-radius:12px;background:var(--acc);color:#fff;font-size:24px}
 #catMsg{margin:0 14px 4px;font-size:13px;color:var(--ng);line-height:1.5}
 #catMsg.ok{color:var(--acc)}
 .seg{display:flex;margin:4px 12px 8px;background:var(--bg2);border-radius:10px;padding:3px}
@@ -229,7 +246,7 @@ body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
 .x{color:var(--muted);font-size:18px;width:30px}
 
 /* ↩ 元に戻す */
-#toast{position:fixed;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom));max-width:496px;margin:0 auto;background:#2C2C2A;color:#fff;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;z-index:40;font-size:14px}
+#toast{position:fixed;left:12px;right:12px;bottom:calc(72px + env(safe-area-inset-bottom));max-width:496px;margin:0 auto;background:#2C2C2A;color:#fff;border-radius:12px;padding:12px 14px;display:flex;gap:10px;align-items:center;z-index:29;font-size:14px}   /* 暗幕(30)・＋のシートより下＝シートの札を塞がない（2026-09-30） */
 #toast span{flex:1}
 #toast button{color:#9BE3B7;font-weight:bold}
 </style>
@@ -253,11 +270,6 @@ body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
   </div>
   <div id="nag" class="bar warn hide"></div>
   <div id="filt"></div>
-  <form id="addForm" autocomplete="off">
-    <input id="addText" type="text" enterkeyhint="done" maxlength="200">
-    <button type="button" id="addPin" title="期限なしで入れる">📌</button>
-    <button type="submit" id="addGo" aria-label="入れる">＋</button>
-  </form>
   <div id="addMsg"></div>
   <!-- 一覧：⭐重要は日に関係なく同じ＝止めたまま、その下だけが指についてくる。スワイプは #groups のどこでも受ける -->
   <div id="groups"><div id="impBox"></div><div id="groupsStage" class="pgstage"><div id="dayGroups" class="groups"></div></div></div>
@@ -267,10 +279,6 @@ body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
      めくりは #catBody で受ける（種類のタブの横スクロールとぶつからないように、タブの行は外す） -->
 <section id="catView" class="hide">
   <div id="catTabs"></div>
-  <form id="catAddForm" autocomplete="off">
-    <input id="catAddText" type="text" enterkeyhint="done" maxlength="200">
-    <button type="submit" id="catAddGo" aria-label="入れる">＋</button>
-  </form>
   <div id="catMsg"></div>
   <div id="catBody">
     <div id="catSeg" class="seg"></div>
@@ -303,6 +311,14 @@ body.selecting{padding-bottom:calc(64px + 170px + env(safe-area-inset-bottom))}
   <button data-tab="set"><b>⚙</b>設定</button>
 </nav>
 
+<!-- ＋ 入れる（一覧・種類タブ。上の入力欄の代わり・2026-09-30） -->
+<button id="fab" class="hide" aria-label="タスクを入れる">＋</button>
+<form id="addSheet" class="hide" autocomplete="off">
+  <input id="addText" type="text" enterkeyhint="done" maxlength="200" placeholder="やることを打つ">
+  <div id="addOpts"></div>
+  <div id="addSheetMsg"></div>
+  <div class="go"><button type="button" id="addClose">閉じる</button><button type="submit" id="addGo">入れる</button></div>
+</form>
 <div id="sheetBack" class="hide"></div>
 <div id="sheet" class="hide"></div>
 <div id="picker" class="hide"></div>
@@ -352,6 +368,7 @@ var SLEEPY_DAYS = 30;      // 期限なしがこの日数さわられていな�
 var PRUNE_DAYS = 30;       // 完了からこの日数たったら片付ける（90→30・2026-09-27 ユーザー指定）
 var NAG_DAYS = 14;         // 控えをこの日数書き出していないと一言
 var IMP_FOLD_OVER = 5;     // 重要がこの件数を超えたら畳める
+var IMP_FOLD_SHOW = 3;     // 畳んでいても見せる件数（期限の近い順の上から・2026-09-30）
 
 // ── 日付 ────────────────────────────────────────
 function pad2(n) { return (n < 10 ? "0" : "") + n; }
@@ -507,6 +524,7 @@ function makeTask(fields, now) {
   return {
     id: fields.id || newId(now), title: fields.title, due: fields.due || "",
     cat: fields.cat || "", imp: !!fields.imp,
+    autoImp: !!fields.autoImp, autoImpFor: fields.autoImpFor || "",   // 当日になったら⭐（autoImpFor＝自動で見た期限の日・2026-09-30）
     repeat: fields.repeat || { kind: "", value: 0 },
     subs: fields.subs || [], note: fields.note || "",
     done: false, doneAt: "", order: fields.order || 0, sentAt: "",
@@ -522,6 +540,7 @@ function normalizeTask(t, now) {
   t.title = typeof t.title === "string" && t.title.trim() ? t.title : UNTITLED;
   t.due = str(t.due); t.cat = str(t.cat); t.note = str(t.note);
   t.imp = !!t.imp; t.done = !!t.done;
+  t.autoImp = !!t.autoImp; t.autoImpFor = str(t.autoImpFor);
   t.doneAt = str(t.doneAt); t.sentAt = str(t.sentAt);
   t.order = typeof t.order === "number" && isFinite(t.order) ? t.order : 0;
   t.repeat = { kind: str(r.kind), value: typeof r.value === "number" && isFinite(r.value) ? r.value : 0 };
@@ -540,7 +559,8 @@ function completeTask(task, now) {
   var due = nextOccurrence(task, today);
   if (!due) return null;
   return makeTask({
-    title: task.title, due: due, cat: task.cat, imp: task.imp,
+    // 当日に⭐がオンなら、次の回は⭐なしで作る（その日になったらまた付く）
+    title: task.title, due: due, cat: task.cat, imp: task.autoImp ? false : task.imp, autoImp: task.autoImp,
     repeat: { kind: task.repeat.kind, value: task.repeat.value }, note: task.note,
     subs: task.subs.map(function (s) { return { t: s.t, done: false }; }), order: task.order
   }, now);
@@ -576,6 +596,17 @@ function groupTasks(tasks, viewDay, today, cat) {
   g.undated.sort(byOrder);
   g.done.sort(function (a, b) { return a.doneAt < b.doneAt ? 1 : -1; });
   return g;
+}
+/** 「当日になったら⭐重要にする」がオンで、期限が今日以前のものに⭐を付ける。変えた件数（印だけも含む）を返す。
+ *  autoImpFor＝その期限の日で一度見た印＝⭐を手で外しても同じ期限の間は付け直さない。期限を変えたら新しい期限の日にまた付く。 */
+function applyAutoImp(tasks, today, nowIso) {
+  var n = 0;
+  tasks.forEach(function (t) {
+    if (t.done || !t.autoImp || !t.due || t.due > today || t.autoImpFor === t.due) return;
+    t.autoImpFor = t.due; n += 1;                      // 印だけ変わった（もう⭐だった）ときも保存したいので数える
+    if (!t.imp) { t.imp = true; t.touchedAt = nowIso; }
+  });
+  return n;
 }
 /** 期限切れ（重要を除く）を全部今日へ。動かした件数を返す。 */
 function moveOverdueToToday(tasks, today, nowIso) {
@@ -835,7 +866,8 @@ var S = { tasks: [], cats: [], prefs: {} };
 var V = { tab: "list", day: "", cat: "", selecting: false, selected: {}, impOpen: true,
           undatedOpen: false, doneOpen: false, calY: 0, calM: 0, editCat: null, sheetId: null,
           sending: false, pinMode: false, catView: "", catMode: "open",
-          subsOpen: {}, subAddFor: null, subDrafts: {} };   // subDrafts＝打ちかけの小項目（描き直しで消えないように）   // 一覧で小項目を開いているタスク／「＋ 足す」の欄を出しているタスク
+          subsOpen: {}, subAddFor: null, subDrafts: {},
+          adding: false, addWhere: "list", add: null, addDraft: "", menuId: null };   // ＋の入力シート（add＝札の値・addDraft＝打ちかけ）／長押しのメニューのタスク   // subDrafts＝打ちかけの小項目（描き直しで消えないように）   // 一覧で小項目を開いているタスク／「＋ 足す」の欄を出しているタスク
 
 function el(id) { return document.getElementById(id); }
 function show(id, on) { el(id).classList.toggle("hide", !on); }
@@ -943,6 +975,8 @@ function disarm(key) {
 function render() {
   var td = today();
   if (!V.day) V.day = td;
+  // 📅 当日になったら⭐（開いたとき・日付が変わって戻ったとき・期限を変えたとき、全部ここを通る）
+  if (applyAutoImp(S.tasks, td, nowIso())) saveAll();
   if (V.tab === "cat" && catKeys().indexOf(V.catView) < 0) { V.catView = ""; S.prefs.catView = ""; }
   // 🔴 選んだまま日・種類・未完了/完了を変えたら選択を外す（見えていない物までまとめて消える・変わるのを防ぐ）
   if (V.selecting) {
@@ -967,6 +1001,9 @@ function render() {
   show("calView", V.tab === "cal");
   show("setView", V.tab === "set");
   show("selbar", (V.tab === "list" || V.tab === "cat") && V.selecting);
+  var fab = (V.tab === "list" || V.tab === "cat") && !V.selecting;   // ＋ は一覧・種類タブだけ・選ぶ中は隠す
+  show("fab", fab);
+  document.body.classList.toggle("hasfab", fab);
   Array.prototype.forEach.call(document.querySelectorAll("#tabs button"), function (b) {
     b.classList.toggle("on", b.getAttribute("data-tab") === V.tab);
   });
@@ -1003,12 +1040,6 @@ function renderList() {
     return '<button class="f' + (V.cat === c.id ? " on" : "") + '" data-cat="' + esc(c.id) + '">' + dot + esc(c.name) + "</button>";
   }).join("");
 
-  // 🔴 入力欄は iPhone の幅（375px）で文字が約214pxしか入らない＝長い案内文は途中で切れる（2026-09-27 実測）。
-  //    iPhone は字体が違うので余裕を残す長さに（今日＝196px・他の日＝一番長い「12/28（月）」で159px）
-  el("addText").placeholder = V.day === td
-    ? "例）牛乳 @明日 #生活 !高"
-    : shortDate(V.day) + "に入れる";
-
   el("impBox").innerHTML = impHtml();
   el("dayGroups").innerHTML = groupsHtml(V.day);
   fitListHeight();
@@ -1026,14 +1057,16 @@ function impHtml() {
   var g = groupTasks(S.tasks, V.day, today(), V.cat);
   var h = [];
   if (g.imp.length) {
-    var many = g.imp.length > IMP_FOLD_OVER;
-    h.push('<div class="gh imphead"><span>⭐ 重要 ' + g.imp.length + "件</span>"
-      + (many ? '<button class="gbtn" data-act="impFold">' + (V.impOpen ? "畳む" : "すべて見る") + "</button>" : "") + "</div>");
-    if (!many || V.impOpen) {
-      h.push('<div data-drop="imp">');      // 並べ替えの入れ物（同じ期限の行どうしだけ動かせる）
-      g.imp.forEach(function (t) { h.push(rowHtml(t, { grp: "imp", showDue: true })); });
-      h.push("</div>");
-    }
+    // 畳んでも期限の近い上の数件は見せる＝「重要が消えた？」と迷わない。開閉は一番下の横長ボタン（2026-09-30 ユーザー決定）
+    // 選ぶ中は全部見せる（隠れた重要も選べるように）
+    var many = g.imp.length > IMP_FOLD_OVER && !V.selecting;
+    var shown = many && !V.impOpen ? g.imp.slice(0, IMP_FOLD_SHOW) : g.imp;
+    h.push('<div class="gh imphead"><span>⭐ 重要 ' + g.imp.length + "件</span></div>");
+    // 並べ替えの入れ物（同じ期限の行どうしだけ動かせる）。畳んで一部だけのときは並べ替えない（隠れた行と順番がずれる）
+    h.push('<div data-drop="' + (shown.length === g.imp.length ? "imp" : "impPart") + '">');
+    shown.forEach(function (t) { h.push(rowHtml(t, { grp: "imp", showDue: true })); });
+    h.push("</div>");
+    if (many) h.push('<button class="impmore" data-act="impFold">' + (V.impOpen ? "▲ " + IMP_FOLD_SHOW + "件だけにする" : "▼ ほか " + (g.imp.length - IMP_FOLD_SHOW) + "件を見る") + "</button>");
   }
   return h.join("");
 }
@@ -1052,7 +1085,7 @@ function groupsHtml(day) {
   h.push('<div class="gh"><span>' + (day === td ? "今日" : shortDate(day)) + " " + g.day.length + "件</span></div>");
   h.push('<div data-drop="day">');
   if (g.day.length) g.day.forEach(function (t) { h.push(rowHtml(t, { grp: "day" })); });
-  else h.push('<div class="empty">この日のやることはありません。<br>上の欄に打って ＋ で入れられます。</div>');
+  else h.push('<div class="empty">この日のやることはありません。<br>右下の ＋ で入れられます。</div>');
   h.push("</div>");
   // P 📌 期限なし
   if (g.undated.length) {
@@ -1083,6 +1116,7 @@ function rowHtml(t, o) {
   } else if (o.showDue) sub.push("期限なし");
   var rep = repeatText(t.repeat);
   if (rep) sub.push("🔁 " + rep);
+  if (t.autoImp && !t.imp && t.due && !t.done && t.autoImpFor !== t.due) sub.push("📅→⭐");   // 当日になったら⭐が付く印（手で外した後＝もう付かないので出さない）
   // 小項目＝札を押すとその場で開く（選ぶ中はただの文字・中身も隠す＝選ぶ動作と混ざらないように・2026-09-28）
   var open = false, allDone = false;
   if (t.subs.length) {
@@ -1140,29 +1174,93 @@ function subsHtml(t, allDone) {
 
 // ── 入れる ───────────────────────────────────
 /** where＝"cat" なら種類タブの入力欄（今の種類が付く・期限なし）。それ以外は一覧（見ている日・絞っている種類） */
-function addFromInput(pin, where) {
-  var onCat = where === "cat";
-  var box = el(onCat ? "catAddText" : "addText");
-  var r = parseInput(box.value, S.cats.map(function (c) { return c.name; }), today());
-  var msg = el(onCat ? "catMsg" : "addMsg");
-  msg.className = "";
-  if (!r.title) { msg.textContent = r.warnings.length ? r.warnings.join(" / ") : "題名を入れてください。"; return; }
-  var cat = "", here = onCat ? V.catView : V.cat;
-  if (r.catName) S.cats.forEach(function (c) { if (c.name === r.catName) cat = c.id; });
-  else if (here && here !== "none") cat = here;       // 見ている・絞っている種類があればそこへ
-  var due = r.due !== null ? r.due : (pin || onCat ? "" : V.day);
-  var t = makeTask({ title: r.title, due: due, cat: cat, imp: r.imp, order: nextOrder(due) }, new Date());
-  S.tasks.push(t);
-  saveAll();
-  box.value = "";
-  if (!due) V.undatedOpen = true;
+/** ＋ を押した＝下から入力シート。期限・種類の最初の値は今の入力欄と同じ
+ *  （一覧＝見ている日・絞っている種類／種類タブ＝期限なし・見ている種類）。打ちかけの文字は前回のまま */
+function openAdd() {
+  var onCat = V.tab === "cat", here = onCat ? V.catView : V.cat;
+  V.adding = true; V.addWhere = V.tab;
+  V.add = { due: onCat ? "" : V.day, cat: here && here !== "none" ? here : "", imp: false, autoImp: false };
+  el("addText").value = V.addDraft || "";
+  el("addSheetMsg").textContent = ""; el("addSheetMsg").className = "";
+  renderAddOpts();
+  show("addSheet", true); show("sheetBack", true);
+  liftAddSheet();
+  el("addText").focus();                    // 押した流れの中で呼ぶ＝iPhone でもキーボードが出る
+}
+function closeAdd() {
+  if (!V.adding) return;
+  V.addDraft = el("addText").value;         // 途中で閉じても打った文字は残す（アプリを閉じるまで）
+  V.adding = false;
+  el("addText").blur();
+  show("addSheet", false);
+  if (!V.sheetId && el("picker").classList.contains("hide")) show("sheetBack", false);
   render();
-  if (r.warnings.length) msg.textContent = "⚠️ " + r.warnings.join(" / ");
+}
+/** 札（期限・種類・⭐・当日に重要）。題名の欄は描き直さない＝キーボードが閉じない */
+function renderAddOpts() {
+  var a = V.add, td = today(), tm = addDays(td, 1), h = [];
+  function pill(on, attrs, label, cls) { return '<button type="button" class="ap' + (cls ? " " + cls : "") + (on ? " on" : "") + '" ' + attrs + ">" + label + "</button>"; }
+  var days = [td, tm];
+  if (V.addWhere !== "cat" && V.day !== td && V.day !== tm) days.push(V.day);   // 見ている日（今日・明日以外）
+  var custom = a.due && days.indexOf(a.due) < 0;
+  h.push('<div class="alb">期限</div><div class="apills">');
+  days.forEach(function (d) { h.push(pill(a.due === d, 'data-ad="due" data-v="' + d + '"', d === td ? "今日" : d === tm ? "明日" : shortDate(d))); });
+  h.push('<span class="ap' + (custom ? " on" : "") + '">📅 ' + (custom ? shortDate(a.due) : "日付…") + '<input type="date" id="addDate" aria-label="日付を選ぶ" value="' + (custom ? a.due : "") + '"></span>');
+  h.push(pill(!a.due, 'data-ad="due" data-v=""', "📌 なし") + "</div>");
+  h.push('<div class="alb">種類</div><div class="apills">');
+  h.push(pill(a.cat === "", 'data-ad="cat" data-v=""', '<i style="background:' + NONE_COLOR + '"></i>未分類'));
+  S.cats.forEach(function (c) { h.push(pill(a.cat === c.id, 'data-ad="cat" data-v="' + esc(c.id) + '"', '<i style="background:' + c.color + '"></i>' + esc(c.name))); });
+  h.push('</div><div class="alb">　</div><div class="apills">');
+  h.push(pill(a.imp, 'data-ad="imp"', "⭐ 重要", "apimp"));
+  h.push(pill(a.autoImp && !!a.due, 'data-ad="autoImp"', "📅 当日に重要", a.due ? "" : "off"));
+  h.push("</div>");
+  el("addOpts").innerHTML = h.join("");
+}
+function onAddOptClick(e) {
+  var b = e.target.closest("[data-ad]"); if (!b) return;
+  var k = b.getAttribute("data-ad"), a = V.add, msg = el("addSheetMsg");
+  msg.textContent = ""; msg.className = "";
+  if (k === "due") a.due = b.getAttribute("data-v");
+  if (k === "cat") a.cat = b.getAttribute("data-v");
+  if (k === "imp") a.imp = !a.imp;
+  if (k === "autoImp") {
+    if (!a.due) { msg.textContent = "「当日に重要」には期限が要ります（先に期限を選んでください）。"; return; }
+    a.autoImp = !a.autoImp;
+  }
+  renderAddOpts();
+}
+/** 🔴 iPhone はキーボードが出ても画面の下端が動かない＝シートの下半分がキーボードに隠れる → 見えている範囲の下端へ持ち上げる */
+function liftAddSheet() {
+  var vv = window.visualViewport;
+  if (!vv || !V.adding) { el("addSheet").style.bottom = ""; return; }
+  var hidden = window.innerHeight - vv.height - vv.offsetTop;
+  el("addSheet").style.bottom = hidden > 0 ? hidden + "px" : "";
+  el("addSheet").style.maxHeight = (vv.height * 0.88) + "px";
+}
+/** 入れる。題名の中の @明日 #生活 !高 は札より優先（今までの書き方もそのまま使える）。
+ *  入れた後もシートは開いたまま＝続けて打てる。期限・種類は残し、⭐と当日に重要は外す（10件続けて全部⭐になる事故を防ぐ） */
+function addFromSheet() {
+  var box = el("addText"), msg = el("addSheetMsg"), a = V.add;
+  var r = parseInput(box.value, S.cats.map(function (c) { return c.name; }), today());
+  msg.className = "";
+  if (!r.title) { msg.textContent = r.warnings.length ? r.warnings.join(" / ") : "題名を入れてください。"; box.focus(); return; }
+  var cat = a.cat;
+  if (r.catName) S.cats.forEach(function (c) { if (c.name === r.catName) cat = c.id; });
+  var due = r.due !== null ? r.due : a.due;
+  var t = makeTask({ title: r.title, due: due, cat: cat, imp: r.imp || a.imp, autoImp: a.autoImp && !!due, order: nextOrder(due) }, new Date());
+  S.tasks.push(t);
+  box.value = ""; V.addDraft = "";
+  a.imp = false; a.autoImp = false;
+  if (!due) V.undatedOpen = true;
+  saveAll();                               // ⭐（当日に重要で今日以前）は render の頭で付く
+  render();
+  renderAddOpts();
+  if (r.warnings.length) msg.textContent = "⚠️ 入れました（" + r.warnings.join(" / ") + "）";
   else {
     msg.className = "ok";
-    msg.textContent = "✔ 入れました" + (onCat ? (due ? "（" + shortDate(due) + "）" : "") : due !== V.day ? "（" + (due ? shortDate(due) : "📌 期限なし") + "）" : "");
-    setTimeout(function () { if (msg.className === "ok") msg.textContent = ""; }, 2500);
+    msg.textContent = "✔「" + t.title + "」を入れました（" + (due ? shortDate(due) : "📌 期限なし") + "）";
   }
+  box.focus();                             // 「入れる」を押しても欄に戻る＝続けて打てる
 }
 function nextOrder(due) {
   var m = 0;
@@ -1191,12 +1289,14 @@ function undoComplete(id) {
   saveAll();
   render();
 }
-/** 「↩ 元に戻す」の帯。ids＝戻す完了の id（まとめて完了なら複数） */
-function showUndo(text, ids) {
+/** 「↩ 元に戻す」の帯。what＝戻す完了の id の配列（まとめて完了なら複数）／{kind:"del", items:[{task, index}]}＝消したもの */
+function showUndo(text, what) {
   if (undoState) clearTimeout(undoState.timer);
   el("toastText").textContent = text;
   show("toast", true);
-  undoState = { ids: ids, timer: setTimeout(function () { show("toast", false); undoState = null; }, 5000) };
+  var st = Array.isArray(what) ? { kind: "done", ids: what } : what;
+  st.timer = setTimeout(function () { show("toast", false); undoState = null; }, 5000);
+  undoState = st;
 }
 
 // ── 一覧の押し分け ──────────────────────────────
@@ -1206,7 +1306,7 @@ function onListClick(e) {
   if (dragJustEnded) { dragJustEnded = false; return; }
   if (act) {
     var a = act.getAttribute("data-act");
-    if (a === "impFold") { V.impOpen = !V.impOpen; render(); return; }
+    if (a === "impFold") { V.impOpen = !V.impOpen; S.prefs.impOpen = V.impOpen; saveAll(); render(); return; }   // 開き直しても覚える
     if (a === "undatedFold") { V.undatedOpen = !V.undatedOpen; render(); return; }
     if (a === "doneFold") { V.doneOpen = !V.doneOpen; render(); return; }
     if (a === "delDone") {
@@ -1293,21 +1393,25 @@ function focusSubNew(id) {
   if (box) box.focus();
 }
 
-// ── 長押しで並べ替え（その日・期限なし・⭐重要の中だけ）─────────────
+// ── 長押し：動かせば並べ替え／動かさずに離せばメニュー（2026-09-30）─────────────
+// 並べ替えは一覧の「その日・期限なし・⭐重要」の中だけ。メニュー（消す・詳細）はどの行でも（期限切れ・完了・種類タブも）
 // ⭐重要は期限の近い順に並ぶ＝**同じ期限の行どうしだけ**入れ替えられる（日付をまたぐと次の描画で戻るため・2026-09-27 ユーザー決定 B）
 var drag = null, dragJustEnded = false;
 function onPointerDown(e) {
   var row = e.target.closest(".row");
-  if (!row || V.selecting || e.target.closest("[data-act]") || e.target.closest("input")) return;
-  var grp = row.getAttribute("data-grp");
-  if (grp !== "day" && grp !== "undated" && grp !== "imp") return;
+  if (drag || e.isPrimary === false) return;          // 2本目の指は無視（1本目のタイマーが残って見た目が残る）
+  if (!row || V.selecting || e.target.closest("[data-act]") || e.target.closest("input") || e.target.closest(".subx")) return;
+  if (row.closest(".pgpane")) return;                 // めくり用の隣の板の行
   var own = taskById(row.getAttribute("data-id"));
   if (!own) return;
+  var grp = row.getAttribute("data-grp");
+  // 入れ物の名前が組と同じときだけ動かせる（⭐重要を畳んで一部だけ見えているときは "impPart"＝動かさない）
+  var canMove = (grp === "day" || grp === "undated" || grp === "imp") && row.parentNode.getAttribute("data-drop") === grp;
   var startY = e.clientY, startX = e.clientX;
-  drag = { row: row, grp: grp, due: own.due, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
+  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, moved: false, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
     if (!drag) return;
     drag.active = true;
-    row.classList.add("dragging");
+    row.classList.add(drag.canMove ? "dragging" : "pressing");
     if (navigator.vibrate) navigator.vibrate(15);
   }, 450) };
 }
@@ -1318,15 +1422,18 @@ function onPointerMove(e) {
     return;
   }
   e.preventDefault();
+  if (!drag.canMove) return;
   var box = drag.row.parentNode;
   var rows = laneRows(box).filter(function (c) { return c !== drag.row; });
   if (!rows.length) return;
+  var before = drag.row.previousSibling;
+  var put = rows[rows.length - 1].nextSibling;       // 既定＝最後の行の後ろ（⭐重要は同じ期限の最後＝次の期限の行より前に留める）
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i].getBoundingClientRect();
-    if (e.clientY < r.top + r.height / 2) { box.insertBefore(drag.row, rows[i]); return; }
+    if (e.clientY < r.top + r.height / 2) { put = rows[i]; break; }
   }
-  // 最後の行の後ろへ（⭐重要は同じ期限の最後＝次の期限の行より前に留める）
-  box.insertBefore(drag.row, rows[rows.length - 1].nextSibling);
+  box.insertBefore(drag.row, put);
+  if (drag.row.previousSibling !== before) drag.moved = true;   // 1回でも入れ替わったら「並べ替え」＝離してもメニューは出さない
 }
 /** 動かしている行と一緒に並べ替える行（⭐重要なら同じ期限のものだけ）。同じ期限の行は並びの中で連続している */
 function laneRows(box) {
@@ -1337,9 +1444,19 @@ function laneRows(box) {
     return !!t && t.due === drag.due;
   });
 }
-function onPointerUp() {
+function onPointerUp(e) {
   if (!drag) return;
   clearTimeout(drag.timer);
+  if (drag.active && !drag.moved) {
+    // 動かさずに離した＝メニュー。🔴 指が外れた（pointercancel＝iPhone が画面の動きに持っていった）ときは出さない
+    drag.row.classList.remove("dragging", "pressing");
+    var id = drag.id;
+    drag = null;
+    dragJustEnded = true;                                  // 離した直後の click で詳細が開かないように
+    setTimeout(function () { dragJustEnded = false; }, 400);
+    if (!e || e.type !== "pointercancel") openRowMenu(id);
+    return;
+  }
   if (drag.active) {
     var box = drag.row.parentNode;
     var ids = laneRows(box).map(function (c) { return c.getAttribute("data-id"); });
@@ -1453,6 +1570,9 @@ function renderSheet() {
   h.push('<div class="sh">題名</div><div style="padding:0 14px"><input class="sin" data-sh="title" maxlength="200" value="' + esc(t.title) + '"></div>');
   h.push('<div class="sh">　</div><div class="sbox">');
   h.push('<div class="srow"><span class="k">⭐ 重要（一覧のいちばん上に出す）</span><button class="tog' + (t.imp ? " on" : "") + '" data-sh="imp"></button></div>');
+  h.push('<div class="srow"><span class="k">📅 当日になったら⭐重要にする</span><button class="tog' + (t.autoImp ? " on" : "") + '" data-sh="autoImp"></button></div>');
+  if (t.autoImp) h.push('<div class="srow" style="font-size:13px;color:var(--muted);padding-top:0">'
+    + (t.due ? shortDate(t.due) + " になったら自動で⭐が付きます（外しても、同じ期限の間は付け直しません）" : "⚠ 期限が無いので働きません（期限を入れてください）") + "</div>");
   h.push('<div class="srow"><span class="k">期限</span><input type="date" data-sh="due" value="' + esc(t.due) + '" style="border:1px solid var(--line);border-radius:8px;padding:6px">'
     + '<button class="btn" data-sh="noDue">なし</button></div>');
   h.push('<div class="srow"><span class="k">種類</span><select data-sh="cat" style="padding:6px;border-radius:8px;border:1px solid var(--line)">'
@@ -1531,6 +1651,7 @@ function onSheetClick(e) {
   if (k === "close") { closeSheet(); return; }
   if (!t) return;
   if (k === "imp") { t.imp = !t.imp; }
+  else if (k === "autoImp") { t.autoImp = !t.autoImp; }   // ⭐は閉じたとき（render の頭）に付く＝開いている間は勝手に変わらない
   else if (k === "noDue") { t.due = ""; t.order = nextOrder(""); }
   else if (k === "subChk") { var s = t.subs[+b.getAttribute("data-i")]; s.done = !s.done; }
   else if (k === "subDel") {
@@ -1540,11 +1661,9 @@ function onSheetClick(e) {
   else if (k === "resend") { t.sentAt = ""; }
   else if (k === "del") {
     armOr("del", b, "もう一度押すと消します", function () {
-      S.tasks = S.tasks.filter(function (x) { return x.id !== t.id; });
       V.sheetId = null;
       show("sheet", false); show("sheetBack", false);
-      saveAll(); render();
-      el("addMsg").className = "ok"; el("addMsg").textContent = "🗑「" + t.title + "」を消しました";
+      deleteWithUndo(t);                 // 長押しで消したときと同じく「元に戻す」を出す
     });
     return;
   } else return;
@@ -1573,7 +1692,7 @@ function catListHtml(cat) {
   var ck = findCat(S.cats, cat);
   group("", ck && ck.keep ? "✔ 完了（新しい順・自動で片付けない）" : "✔ 完了（新しい順・" + PRUNE_DAYS + "日で自動で片付く）", v.done);
   if (!h.length) {
-    h.push('<div class="empty">' + (V.catMode === "done" ? "完了したものはありません。" : "この種類のやることはありません。<br>上の欄に打って ＋ で入れられます。") + "</div>");
+    h.push('<div class="empty">' + (V.catMode === "done" ? "完了したものはありません。" : "この種類のやることはありません。<br>右下の ＋ で入れられます。") + "</div>");
   }
   return h.join("");
 }
@@ -1597,7 +1716,6 @@ function renderCat() {
   el("catSeg").innerHTML = [["open", "未完了 " + v.open], ["done", "完了 " + nDone], ["all", "すべて"]].map(function (m) {
     return '<button data-cm="' + m[0] + '"' + (V.catMode === m[0] ? ' class="on"' : "") + ">" + m[1] + "</button>";
   }).join("");
-  el("catAddText").placeholder = V.catView === "" || V.catView === "none" ? "例）牛乳 #生活 @明日" : catLabel(V.catView) + " に入れる";
   el("catList").innerHTML = catListHtml(V.catView);
   fitToBottom(el("catBody"));
   renderSelCount();
@@ -1679,11 +1797,38 @@ function openPicker(kind, n) {
   el("picker").innerHTML = h.join("");
   show("picker", true); show("sheetBack", true);
 }
-function closePicker() { show("picker", false); if (!V.sheetId) show("sheetBack", false); }
+function closePicker() { show("picker", false); V.menuId = null; if (!V.sheetId && !V.adding) show("sheetBack", false); }
+/** 長押しのメニュー（下から出る＝まとめての期限・種類と同じ部品） */
+function openRowMenu(id) {
+  var t = taskById(id); if (!t) return;
+  V.menuId = id;
+  el("picker").innerHTML = "<b>" + esc(t.title) + "</b>"
+    + '<button class="pk" data-pk="rowDel" style="color:var(--ng);font-weight:bold">🗑 消す</button>'
+    + '<button class="pk" data-pk="rowOpen">✏ 詳細を開く</button>'
+    + '<button class="pk" data-pk="close" style="color:var(--muted)">やめる</button>';
+  show("picker", true); show("sheetBack", true);
+}
+/** 1件消して「元に戻す」を出す（長押しのメニュー・詳細画面の両方） */
+function deleteWithUndo(t) {
+  var index = S.tasks.indexOf(t);
+  if (index < 0) return;
+  S.tasks.splice(index, 1);
+  delete V.selected[t.id];
+  saveAll(); render();
+  showUndo("🗑「" + t.title + "」を消しました", { kind: "del", items: [{ task: t, index: index }] });
+}
 function onPickerClick(e) {
+  if (dragJustEnded) return;       // 🔴 長押しを離した直後の click が、下の方の行ならメニューの「🗑 消す」に当たる（同じ理由）
   var b = e.target.closest("[data-pk]"); if (!b) return;
   var k = b.getAttribute("data-pk"), ids = selIds(), iso = nowIso(), v = b.getAttribute("data-v");
   if (k === "close") { closePicker(); return; }
+  if (k === "rowDel" || k === "rowOpen") {
+    var mt = taskById(V.menuId);
+    closePicker();
+    if (!mt) return;
+    if (k === "rowDel") deleteWithUndo(mt); else openSheet(mt.id);
+    return;
+  }
   if (k === "dueDate") { v = el("pkDate").value; if (!v) { el("pkDate").focus(); return; } k = "due"; }
   var n;
   if (k === "due") n = setDueMany(S.tasks, ids, v, iso);
@@ -2171,12 +2316,30 @@ function setupOffline() {
 function start() {
   loadAll();
   V.catView = typeof S.prefs.catView === "string" ? S.prefs.catView : "";   // 種類タブは前回見ていた種類から（16）
+  V.impOpen = S.prefs.impOpen !== false;                                     // 重要を畳んだか（覚える・既定は開く）
   var kept = pruneDone(S.tasks, today(), S.cats);           // 完了から PRUNE_DAYS 日たったものを片付ける
   if (kept.length !== S.tasks.length) { S.tasks = kept; saveAll(); }
   V.day = today();
 
-  el("addForm").addEventListener("submit", function (e) { e.preventDefault(); addFromInput(false); });
-  el("addPin").addEventListener("click", function () { addFromInput(true); });
+  // ＋ 入れる（右下の丸 → 下から入力シート）
+  el("fab").addEventListener("click", openAdd);
+  el("addSheet").addEventListener("submit", function (e) { e.preventDefault(); addFromSheet(); });
+  el("addClose").addEventListener("click", closeAdd);
+  el("addOpts").addEventListener("click", onAddOptClick);
+  el("addOpts").addEventListener("change", function (e) {
+    if (e.target.id !== "addDate" || !e.target.value) return;
+    V.add.due = e.target.value; el("addSheetMsg").textContent = "";
+    // 🔴 iPhone は日付を回すたびに change が来る＝欄ごと作り直すと日付選びが閉じる → 日付の欄は残して札の印と文字だけ変える
+    var box = e.target.parentNode;
+    Array.prototype.forEach.call(el("addOpts").querySelectorAll('[data-ad="due"]'), function (b) { b.classList.remove("on"); });
+    box.classList.add("on");
+    box.firstChild.nodeValue = "📅 " + shortDate(e.target.value);
+    var ai = el("addOpts").querySelector('[data-ad="autoImp"]'); if (ai) ai.classList.remove("off");   // 期限ができた＝当日に重要が使える
+  });
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", liftAddSheet);
+    window.visualViewport.addEventListener("scroll", liftAddSheet);
+  }
   el("groups").addEventListener("click", onListClick);
   el("groups").addEventListener("keydown", onListKey);
   el("catList").addEventListener("keydown", onListKey);
@@ -2188,6 +2351,8 @@ function start() {
   document.addEventListener("pointercancel", onPointerUp);
   document.addEventListener("touchmove", onTouchMove, { passive: false });
   el("groups").addEventListener("contextmenu", function (e) { e.preventDefault(); });
+  el("catList").addEventListener("pointerdown", onPointerDown);        // 種類タブの行も長押しでメニュー（並べ替えはしない）
+  el("catList").addEventListener("contextmenu", function (e) { e.preventDefault(); });
   el("days").addEventListener("click", function (e) {
     var b = e.target.closest("[data-day]"); if (b) { V.day = b.getAttribute("data-day"); render(); }
   });
@@ -2214,7 +2379,6 @@ function start() {
   el("catTabs").addEventListener("click", function (e) { var b = e.target.closest("[data-cv]"); if (b) setCatView(b.getAttribute("data-cv")); });
   el("catSeg").addEventListener("click", function (e) { var b = e.target.closest("[data-cm]"); if (b) { V.catMode = b.getAttribute("data-cm"); render(); } });
   el("catList").addEventListener("click", onListClick);
-  el("catAddForm").addEventListener("submit", function (e) { e.preventDefault(); addFromInput(true, "cat"); });
   el("tabs").addEventListener("click", function (e) {
     var b = e.target.closest("[data-tab]"); if (!b) return;
     V.tab = b.getAttribute("data-tab");
@@ -2244,14 +2408,25 @@ function start() {
   el("sheet").addEventListener("input", onSheetInput);
   el("sheet").addEventListener("change", onSheetChange);
   el("sheet").addEventListener("keydown", onSheetKey);
-  el("sheetBack").addEventListener("click", function () { if (!el("picker").classList.contains("hide")) { closePicker(); return; } closeSheet(); });
+  el("sheetBack").addEventListener("click", function () {
+    // 🔴 iPhone は指を離した後の click を「その時点で指の下にある物」へ配る＝長押しで出した暗幕に当たってすぐ閉じる
+    if (dragJustEnded) return;
+    if (!el("picker").classList.contains("hide")) { closePicker(); return; }
+    if (V.adding) { closeAdd(); return; }
+    closeSheet();
+  });
   el("toastUndo").addEventListener("click", function () {
     if (!undoState) return;
     clearTimeout(undoState.timer);
-    var ids = undoState.ids; undoState = null;
+    var st = undoState; undoState = null;
     show("toast", false);
-    var set = {}; ids.forEach(function (i) { set[i] = true; });
-    S.tasks = uncompleteMany(S.tasks, set, nowIso()).tasks;
+    if (st.kind === "del") {
+      // 元の位置へ戻す（まだ無いものだけ＝2回戻さない）
+      st.items.forEach(function (it) { if (!taskById(it.task.id)) S.tasks.splice(Math.min(it.index, S.tasks.length), 0, it.task); });
+    } else {
+      var set = {}; st.ids.forEach(function (i) { set[i] = true; });
+      S.tasks = uncompleteMany(S.tasks, set, nowIso()).tasks;
+    }
     saveAll(); render();
   });
   // 🔴 日付が変わってから開き直したとき（閉じずに翌日）も「今日」と数字を数え直す
