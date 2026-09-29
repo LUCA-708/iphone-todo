@@ -368,6 +368,7 @@ var SLEEPY_DAYS = 30;      // 期限なしがこの日数さわられていな�
 var PRUNE_DAYS = 30;       // 完了からこの日数たったら片付ける（90→30・2026-09-27 ユーザー指定）
 var NAG_DAYS = 14;         // 控えをこの日数書き出していないと一言
 var IMP_FOLD_OVER = 5;     // 重要がこの件数を超えたら畳める
+var LONG_PRESS_MS = 500;   // 長押しでメニューが出るまで（iPhone の標準の長押しと同じくらい・2026-09-30）
 var IMP_FOLD_SHOW = 3;     // 畳んでいても見せる件数（期限の近い順の上から・2026-09-30）
 
 // ── 日付 ────────────────────────────────────────
@@ -1184,7 +1185,6 @@ function openAdd() {
   el("addSheetMsg").textContent = ""; el("addSheetMsg").className = "";
   renderAddOpts();
   show("addSheet", true); show("sheetBack", true);
-  liftAddSheet();
   el("addText").focus();                    // 押した流れの中で呼ぶ＝iPhone でもキーボードが出る
 }
 function closeAdd() {
@@ -1229,14 +1229,8 @@ function onAddOptClick(e) {
   }
   renderAddOpts();
 }
-/** 🔴 iPhone はキーボードが出ても画面の下端が動かない＝シートの下半分がキーボードに隠れる → 見えている範囲の下端へ持ち上げる */
-function liftAddSheet() {
-  var vv = window.visualViewport;
-  if (!vv || !V.adding) { el("addSheet").style.bottom = ""; return; }
-  var hidden = window.innerHeight - vv.height - vv.offsetTop;
-  el("addSheet").style.bottom = hidden > 0 ? hidden + "px" : "";
-  el("addSheet").style.maxHeight = (vv.height * 0.88) + "px";
-}
+// ※ キーボードの分だけシートを持ち上げる仕組みは iPhone で効かなかった（2026-09-30 実機）＝外した。
+//   入れるのはキーボードの ✓（Enter）で足りる／✓で閉じれば下の「入れる」も見える
 /** 入れる。題名の中の @明日 #生活 !高 は札より優先（今までの書き方もそのまま使える）。
  *  入れた後もシートは開いたまま＝続けて打てる。期限・種類は残し、⭐と当日に重要は外す（10件続けて全部⭐になる事故を防ぐ） */
 function addFromSheet() {
@@ -1393,7 +1387,7 @@ function focusSubNew(id) {
   if (box) box.focus();
 }
 
-// ── 長押し：動かせば並べ替え／動かさずに離せばメニュー（2026-09-30）─────────────
+// ── 長押し：0.5秒でメニュー／そのまま指を動かすとメニューが消えて並べ替え（iPhone のホーム画面と同じ・2026-09-30 ユーザー決定）──
 // 並べ替えは一覧の「その日・期限なし・⭐重要」の中だけ。メニュー（消す・詳細）はどの行でも（期限切れ・完了・種類タブも）
 // ⭐重要は期限の近い順に並ぶ＝**同じ期限の行どうしだけ**入れ替えられる（日付をまたぐと次の描画で戻るため・2026-09-27 ユーザー決定 B）
 var drag = null, dragJustEnded = false;
@@ -1408,12 +1402,13 @@ function onPointerDown(e) {
   // 入れ物の名前が組と同じときだけ動かせる（⭐重要を畳んで一部だけ見えているときは "impPart"＝動かさない）
   var canMove = (grp === "day" || grp === "undated" || grp === "imp") && row.parentNode.getAttribute("data-drop") === grp;
   var startY = e.clientY, startX = e.clientX;
-  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, moved: false, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
+  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, dragging: false, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
     if (!drag) return;
     drag.active = true;
-    row.classList.add(drag.canMove ? "dragging" : "pressing");
+    row.classList.add("pressing");
     if (navigator.vibrate) navigator.vibrate(15);
-  }, 450) };
+    openRowMenu(drag.id);                              // 指を置いたまま出す（離すのを待たない）
+  }, LONG_PRESS_MS) };
 }
 function onPointerMove(e) {
   if (!drag) return;
@@ -1423,17 +1418,23 @@ function onPointerMove(e) {
   }
   e.preventDefault();
   if (!drag.canMove) return;
+  if (!drag.dragging) {
+    // メニューが出たあとで指を8px動かした＝並べ替えに切り替える（メニューは閉じる）
+    if (Math.abs(e.clientY - drag.startY) <= 8 && Math.abs(e.clientX - drag.startX) <= 8) return;
+    drag.dragging = true;
+    closePicker();
+    drag.row.classList.remove("pressing");
+    drag.row.classList.add("dragging");
+  }
   var box = drag.row.parentNode;
   var rows = laneRows(box).filter(function (c) { return c !== drag.row; });
   if (!rows.length) return;
-  var before = drag.row.previousSibling;
   var put = rows[rows.length - 1].nextSibling;       // 既定＝最後の行の後ろ（⭐重要は同じ期限の最後＝次の期限の行より前に留める）
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i].getBoundingClientRect();
     if (e.clientY < r.top + r.height / 2) { put = rows[i]; break; }
   }
   box.insertBefore(drag.row, put);
-  if (drag.row.previousSibling !== before) drag.moved = true;   // 1回でも入れ替わったら「並べ替え」＝離してもメニューは出さない
 }
 /** 動かしている行と一緒に並べ替える行（⭐重要なら同じ期限のものだけ）。同じ期限の行は並びの中で連続している */
 function laneRows(box) {
@@ -1447,14 +1448,12 @@ function laneRows(box) {
 function onPointerUp(e) {
   if (!drag) return;
   clearTimeout(drag.timer);
-  if (drag.active && !drag.moved) {
-    // 動かさずに離した＝メニュー。🔴 指が外れた（pointercancel＝iPhone が画面の動きに持っていった）ときは出さない
-    drag.row.classList.remove("dragging", "pressing");
-    var id = drag.id;
+  if (drag.active && !drag.dragging) {
+    // 動かさずに離した＝メニューは出たまま。🔴 離した直後の click が詳細・暗幕・メニューの「消す」に当たらないように止める
+    drag.row.classList.remove("pressing");
     drag = null;
-    dragJustEnded = true;                                  // 離した直後の click で詳細が開かないように
+    dragJustEnded = true;
     setTimeout(function () { dragJustEnded = false; }, 400);
-    if (!e || e.type !== "pointercancel") openRowMenu(id);
     return;
   }
   if (drag.active) {
@@ -2336,10 +2335,6 @@ function start() {
     box.firstChild.nodeValue = "📅 " + shortDate(e.target.value);
     var ai = el("addOpts").querySelector('[data-ad="autoImp"]'); if (ai) ai.classList.remove("off");   // 期限ができた＝当日に重要が使える
   });
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", liftAddSheet);
-    window.visualViewport.addEventListener("scroll", liftAddSheet);
-  }
   el("groups").addEventListener("click", onListClick);
   el("groups").addEventListener("keydown", onListKey);
   el("catList").addEventListener("keydown", onListKey);
