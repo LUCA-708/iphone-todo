@@ -609,6 +609,26 @@ function applyAutoImp(tasks, today, nowIso) {
   });
   return n;
 }
+/** 長押しの並べ替えを保存する。newIds＝画面に見えている行の新しい並び。
+ *  🔴 見えていない同じ組の行（⭐重要を畳んで隠れた分・種類で絞って隠れた分）は**元の位置のまま**残し、
+ *     見えていた行が占めていた位置にだけ新しい並びを入れる → 組全体に 10,20,30… を振り直す（番号がぶつからない）。
+ *  grp＝"imp"（key＝期限）／"day"（key＝その日）／"undated"。動かした件数を返す。 */
+function reorderLane(tasks, grp, key, newIds, nowIso) {
+  function inLane(t) {
+    if (t.done) return false;
+    if (grp === "imp") return t.imp && t.due === key;
+    if (t.imp) return false;
+    return grp === "undated" ? !t.due : t.due === key;
+  }
+  var byId = {}, shown = {}, n = 0;
+  tasks.forEach(function (t) { byId[t.id] = t; });
+  newIds.forEach(function (id) { shown[id] = true; });
+  var full = tasks.filter(inLane).sort(byOrder);
+  var q = newIds.filter(function (id) { return byId[id] && inLane(byId[id]); });
+  full = full.map(function (t) { return shown[t.id] ? byId[q.shift()] : t; });
+  full.forEach(function (t, i) { var o = (i + 1) * 10; if (t.order !== o) { t.order = o; t.touchedAt = nowIso; n += 1; } });
+  return n;
+}
 /** 期限切れ（重要を除く）を全部今日へ。動かした件数を返す。 */
 function moveOverdueToToday(tasks, today, nowIso) {
   var n = 0;
@@ -1063,8 +1083,8 @@ function impHtml() {
     var many = g.imp.length > IMP_FOLD_OVER && !V.selecting;
     var shown = many && !V.impOpen ? g.imp.slice(0, IMP_FOLD_SHOW) : g.imp;
     h.push('<div class="gh imphead"><span>⭐ 重要 ' + g.imp.length + "件</span></div>");
-    // 並べ替えの入れ物（同じ期限の行どうしだけ動かせる）。畳んで一部だけのときは並べ替えない（隠れた行と順番がずれる）
-    h.push('<div data-drop="' + (shown.length === g.imp.length ? "imp" : "impPart") + '">');
+    // 並べ替えの入れ物（同じ期限の行どうしだけ動かせる）
+    h.push('<div data-drop="imp">');     // 畳んで一部だけでも並べ替えできる（隠れた行の位置は reorderLane が守る・2026-09-30 実機の指摘）
     shown.forEach(function (t) { h.push(rowHtml(t, { grp: "imp", showDue: true })); });
     h.push("</div>");
     if (many) h.push('<button class="impmore" data-act="impFold">' + (V.impOpen ? "▲ " + IMP_FOLD_SHOW + "件だけにする" : "▼ ほか " + (g.imp.length - IMP_FOLD_SHOW) + "件を見る") + "</button>");
@@ -1399,7 +1419,7 @@ function onPointerDown(e) {
   var own = taskById(row.getAttribute("data-id"));
   if (!own) return;
   var grp = row.getAttribute("data-grp");
-  // 入れ物の名前が組と同じときだけ動かせる（⭐重要を畳んで一部だけ見えているときは "impPart"＝動かさない）
+  // 入れ物の名前が組と同じときだけ動かせる
   var canMove = (grp === "day" || grp === "undated" || grp === "imp") && row.parentNode.getAttribute("data-drop") === grp;
   var startY = e.clientY, startX = e.clientX;
   drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, dragging: false, lx: 0, ly: 0, dbg: { pm: 0, tm: 0, pc: 0, tc: 0 }, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
@@ -1456,6 +1476,7 @@ function laneRows(box) {
 function onPointerUp(e) {
   if (!drag) return;
   if (e && e.type === "pointercancel" && drag.active) { drag.dbg.pc += 1; return; }   // 指はまだ画面にある＝touchend を待つ
+  if (e && drag.active) { drag.lx = e.clientX; drag.ly = e.clientY; }
   endDrag();
 }
 function onTouchEnd(e) {
@@ -1472,10 +1493,10 @@ function endDrag() {
     // 動かさずに離した＝メニューは出たまま。🔴 離した直後の click が詳細・暗幕・メニューの「消す」に当たらないように止める
     drag.row.classList.remove("pressing");
     // 🔧 一時的な確かめの印：並べ替えられる行で指を大きく動かしたのに並べ替えにならなかったら、届いた知らせの数を出す（直ったら外す）
-    if (drag.canMove && Math.abs((drag.ly || drag.startY) - drag.startY) > 20 && !el("picker").classList.contains("hide")) {
+    if (Math.abs((drag.ly || drag.startY) - drag.startY) > 20 && !el("picker").classList.contains("hide")) {
       var d = drag.dbg, p = document.createElement("div");
       p.style.cssText = "font-size:12px;color:var(--muted);margin:-4px 4px 8px";
-      p.textContent = "🔧 移動 " + d.pm + "/" + d.tm + " 中断 " + d.pc + "/" + d.tc;
+      p.textContent = "🔧 移動 " + d.pm + "/" + d.tm + " 中断 " + d.pc + "/" + d.tc + " " + drag.grp + (drag.canMove ? "" : " 動かせない行");
       el("picker").insertBefore(p, el("picker").children[1] || null);
     }
     drag = null;
@@ -1486,7 +1507,7 @@ function endDrag() {
   if (drag.active) {
     var box = drag.row.parentNode;
     var ids = laneRows(box).map(function (c) { return c.getAttribute("data-id"); });
-    ids.forEach(function (id, i) { var t = taskById(id); if (t) { t.order = (i + 1) * 10; touch(t); } });
+    reorderLane(S.tasks, drag.grp, drag.grp === "imp" ? drag.due : drag.grp === "day" ? V.day : "", ids, nowIso());
     saveAll();
     dragJustEnded = true;
     setTimeout(function () { dragJustEnded = false; }, 400);
