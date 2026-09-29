@@ -609,6 +609,12 @@ function applyAutoImp(tasks, today, nowIso) {
   });
   return n;
 }
+/** 「当日になったら⭐」のスイッチ。🔴 入れ直したら付け直しの対象に戻す（autoImpFor を空に）
+ *  ＝⭐を手で外しただけなら同じ期限では付け直さないが、スイッチを入れ直すのは「付けて」という操作（2026-09-30 実機の指摘） */
+function setAutoImp(t, on) {
+  t.autoImp = !!on;
+  if (on) t.autoImpFor = "";
+}
 /** 長押しの並べ替えを保存する。newIds＝画面に見えている行の新しい並び。
  *  🔴 見えていない同じ組の行（⭐重要を畳んで隠れた分・種類で絞って隠れた分）は**元の位置のまま**残し、
  *     見えていた行が占めていた位置にだけ新しい並びを入れる → 組全体に 10,20,30… を振り直す（番号がぶつからない）。
@@ -1422,7 +1428,7 @@ function onPointerDown(e) {
   // 入れ物の名前が組と同じときだけ動かせる
   var canMove = (grp === "day" || grp === "undated" || grp === "imp") && row.parentNode.getAttribute("data-drop") === grp;
   var startY = e.clientY, startX = e.clientX;
-  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, dragging: false, lx: 0, ly: 0, dbg: { pm: 0, tm: 0, pc: 0, tc: 0 }, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
+  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, dragging: false, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
     if (!drag) return;
     drag.active = true;
     row.classList.add("pressing");
@@ -1435,7 +1441,7 @@ function onPointerDown(e) {
 //    pointercancel が来ても指が画面にある間は終わらせず、touchend で締める。
 function onPointerMove(e) {
   if (!drag) return;
-  if (drag.active) { e.preventDefault(); drag.dbg.pm += 1; }
+  if (drag.active) e.preventDefault();
   dragMove(e.clientX, e.clientY);
 }
 function dragMove(x, y) {
@@ -1444,7 +1450,6 @@ function dragMove(x, y) {
     if (Math.abs(y - drag.startY) > 8 || Math.abs(x - drag.startX) > 8) { clearTimeout(drag.timer); drag = null; }
     return;
   }
-  drag.lx = x; drag.ly = y;
   if (!drag.canMove) return;
   if (!drag.dragging) {
     // メニューが出たあとで指を8px動かした＝並べ替えに切り替える（メニューは閉じる）
@@ -1475,15 +1480,11 @@ function laneRows(box) {
 }
 function onPointerUp(e) {
   if (!drag) return;
-  if (e && e.type === "pointercancel" && drag.active) { drag.dbg.pc += 1; return; }   // 指はまだ画面にある＝touchend を待つ
-  if (e && drag.active) { drag.lx = e.clientX; drag.ly = e.clientY; }
+  if (e && e.type === "pointercancel" && drag.active) return;   // 指はまだ画面にある＝touchend を待つ
   endDrag();
 }
 function onTouchEnd(e) {
   if (!drag) return;
-  if (e.type === "touchcancel") drag.dbg.tc += 1;
-  var t = e.changedTouches && e.changedTouches[0];
-  if (t && drag.active) { drag.lx = t.clientX; drag.ly = t.clientY; }
   endDrag();
 }
 function endDrag() {
@@ -1492,13 +1493,6 @@ function endDrag() {
   if (drag.active && !drag.dragging) {
     // 動かさずに離した＝メニューは出たまま。🔴 離した直後の click が詳細・暗幕・メニューの「消す」に当たらないように止める
     drag.row.classList.remove("pressing");
-    // 🔧 一時的な確かめの印：並べ替えられる行で指を大きく動かしたのに並べ替えにならなかったら、届いた知らせの数を出す（直ったら外す）
-    if (Math.abs((drag.ly || drag.startY) - drag.startY) > 20 && !el("picker").classList.contains("hide")) {
-      var d = drag.dbg, p = document.createElement("div");
-      p.style.cssText = "font-size:12px;color:var(--muted);margin:-4px 4px 8px";
-      p.textContent = "🔧 移動 " + d.pm + "/" + d.tm + " 中断 " + d.pc + "/" + d.tc + " " + drag.grp + (drag.canMove ? "" : " 動かせない行");
-      el("picker").insertBefore(p, el("picker").children[1] || null);
-    }
     drag = null;
     dragJustEnded = true;
     setTimeout(function () { dragJustEnded = false; }, 400);
@@ -1518,7 +1512,7 @@ function endDrag() {
 // 🔴 並べ替え中だけ画面の上下の動きを止める（止めないと指と一緒に一覧が流れる）＋指の動きをここからも受ける
 function onTouchMove(e) {
   if (!drag) return;
-  if (drag.active) { e.preventDefault(); drag.dbg.tm += 1; }
+  if (drag.active) e.preventDefault();
   var t = e.touches && e.touches[0];
   if (t) dragMove(t.clientX, t.clientY);
 }
@@ -1624,7 +1618,7 @@ function renderSheet() {
   h.push('<div class="srow"><span class="k">⭐ 重要（一覧のいちばん上に出す）</span><button class="tog' + (t.imp ? " on" : "") + '" data-sh="imp"></button></div>');
   h.push('<div class="srow"><span class="k">📅 当日になったら⭐重要にする</span><button class="tog' + (t.autoImp ? " on" : "") + '" data-sh="autoImp"></button></div>');
   if (t.autoImp) h.push('<div class="srow" style="font-size:13px;color:var(--muted);padding-top:0">'
-    + (t.due ? shortDate(t.due) + " になったら自動で⭐が付きます（外しても、同じ期限の間は付け直しません）" : "⚠ 期限が無いので働きません（期限を入れてください）") + "</div>");
+    + (t.due ? shortDate(t.due) + " になったら自動で⭐が付きます（⭐を外しても同じ期限の間は付け直しません。付け直したいときはこのスイッチを入れ直す）" : "⚠ 期限が無いので働きません（期限を入れてください）") + "</div>");
   h.push('<div class="srow"><span class="k">期限</span><input type="date" data-sh="due" value="' + esc(t.due) + '" style="border:1px solid var(--line);border-radius:8px;padding:6px">'
     + '<button class="btn" data-sh="noDue">なし</button></div>');
   h.push('<div class="srow"><span class="k">種類</span><select data-sh="cat" style="padding:6px;border-radius:8px;border:1px solid var(--line)">'
@@ -1703,7 +1697,7 @@ function onSheetClick(e) {
   if (k === "close") { closeSheet(); return; }
   if (!t) return;
   if (k === "imp") { t.imp = !t.imp; }
-  else if (k === "autoImp") { t.autoImp = !t.autoImp; }   // ⭐は閉じたとき（render の頭）に付く＝開いている間は勝手に変わらない
+  else if (k === "autoImp") { setAutoImp(t, !t.autoImp); }   // ⭐は閉じたとき（render の頭）に付く＝開いている間は勝手に変わらない
   else if (k === "noDue") { t.due = ""; t.order = nextOrder(""); }
   else if (k === "subChk") { var s = t.subs[+b.getAttribute("data-i")]; s.done = !s.done; }
   else if (k === "subDel") {
