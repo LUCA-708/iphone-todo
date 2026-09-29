@@ -632,7 +632,12 @@ function reorderLane(tasks, grp, key, newIds, nowIso) {
   var full = tasks.filter(inLane).sort(byOrder);
   var q = newIds.filter(function (id) { return byId[id] && inLane(byId[id]); });
   full = full.map(function (t) { return shown[t.id] ? byId[q.shift()] : t; });
-  full.forEach(function (t, i) { var o = (i + 1) * 10; if (t.order !== o) { t.order = o; t.touchedAt = nowIso; n += 1; } });
+  // 🔴 「さわった」印は見えていた行だけ＝隠れた行は番号だけ振り直す（期限なしの 💤 さわっていない が勝手に消えないように・2026-09-30 /recheck）
+  full.forEach(function (t, i) {
+    var o = (i + 1) * 10;
+    if (t.order !== o) { t.order = o; n += 1; }
+    if (shown[t.id]) t.touchedAt = nowIso;
+  });
   return n;
 }
 /** 期限切れ（重要を除く）を全部今日へ。動かした件数を返す。 */
