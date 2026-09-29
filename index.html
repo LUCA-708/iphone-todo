@@ -1402,7 +1402,7 @@ function onPointerDown(e) {
   // 入れ物の名前が組と同じときだけ動かせる（⭐重要を畳んで一部だけ見えているときは "impPart"＝動かさない）
   var canMove = (grp === "day" || grp === "undated" || grp === "imp") && row.parentNode.getAttribute("data-drop") === grp;
   var startY = e.clientY, startX = e.clientX;
-  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, dragging: false, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
+  drag = { row: row, id: own.id, grp: grp, due: own.due, canMove: canMove, dragging: false, lx: 0, ly: 0, dbg: { pm: 0, tm: 0, pc: 0, tc: 0 }, startY: startY, startX: startX, active: false, timer: setTimeout(function () {
     if (!drag) return;
     drag.active = true;
     row.classList.add("pressing");
@@ -1410,17 +1410,25 @@ function onPointerDown(e) {
     openRowMenu(drag.id);                              // 指を置いたまま出す（離すのを待たない）
   }, LONG_PRESS_MS) };
 }
+// 🔴 iPhone では長押しでメニュー（暗幕）を出したあと pointermove が届かない疑い（2026-09-30 実機で並べ替えにならなかった）
+//    → 指の動きは pointermove と touchmove の両方から受ける（どちらが来ても同じ dragMove）。
+//    pointercancel が来ても指が画面にある間は終わらせず、touchend で締める。
 function onPointerMove(e) {
   if (!drag) return;
+  if (drag.active) { e.preventDefault(); drag.dbg.pm += 1; }
+  dragMove(e.clientX, e.clientY);
+}
+function dragMove(x, y) {
+  if (!drag) return;
   if (!drag.active) {
-    if (Math.abs(e.clientY - drag.startY) > 8 || Math.abs(e.clientX - drag.startX) > 8) { clearTimeout(drag.timer); drag = null; }
+    if (Math.abs(y - drag.startY) > 8 || Math.abs(x - drag.startX) > 8) { clearTimeout(drag.timer); drag = null; }
     return;
   }
-  e.preventDefault();
+  drag.lx = x; drag.ly = y;
   if (!drag.canMove) return;
   if (!drag.dragging) {
     // メニューが出たあとで指を8px動かした＝並べ替えに切り替える（メニューは閉じる）
-    if (Math.abs(e.clientY - drag.startY) <= 8 && Math.abs(e.clientX - drag.startX) <= 8) return;
+    if (Math.abs(y - drag.startY) <= 8 && Math.abs(x - drag.startX) <= 8) return;
     drag.dragging = true;
     closePicker();
     drag.row.classList.remove("pressing");
@@ -1432,7 +1440,7 @@ function onPointerMove(e) {
   var put = rows[rows.length - 1].nextSibling;       // 既定＝最後の行の後ろ（⭐重要は同じ期限の最後＝次の期限の行より前に留める）
   for (var i = 0; i < rows.length; i++) {
     var r = rows[i].getBoundingClientRect();
-    if (e.clientY < r.top + r.height / 2) { put = rows[i]; break; }
+    if (y < r.top + r.height / 2) { put = rows[i]; break; }
   }
   box.insertBefore(drag.row, put);
 }
@@ -1447,10 +1455,29 @@ function laneRows(box) {
 }
 function onPointerUp(e) {
   if (!drag) return;
+  if (e && e.type === "pointercancel" && drag.active) { drag.dbg.pc += 1; return; }   // 指はまだ画面にある＝touchend を待つ
+  endDrag();
+}
+function onTouchEnd(e) {
+  if (!drag) return;
+  if (e.type === "touchcancel") drag.dbg.tc += 1;
+  var t = e.changedTouches && e.changedTouches[0];
+  if (t && drag.active) { drag.lx = t.clientX; drag.ly = t.clientY; }
+  endDrag();
+}
+function endDrag() {
+  if (!drag) return;
   clearTimeout(drag.timer);
   if (drag.active && !drag.dragging) {
     // 動かさずに離した＝メニューは出たまま。🔴 離した直後の click が詳細・暗幕・メニューの「消す」に当たらないように止める
     drag.row.classList.remove("pressing");
+    // 🔧 一時的な確かめの印：並べ替えられる行で指を大きく動かしたのに並べ替えにならなかったら、届いた知らせの数を出す（直ったら外す）
+    if (drag.canMove && Math.abs((drag.ly || drag.startY) - drag.startY) > 20 && !el("picker").classList.contains("hide")) {
+      var d = drag.dbg, p = document.createElement("div");
+      p.style.cssText = "font-size:12px;color:var(--muted);margin:-4px 4px 8px";
+      p.textContent = "🔧 移動 " + d.pm + "/" + d.tm + " 中断 " + d.pc + "/" + d.tc;
+      el("picker").insertBefore(p, el("picker").children[1] || null);
+    }
     drag = null;
     dragJustEnded = true;
     setTimeout(function () { dragJustEnded = false; }, 400);
@@ -1467,8 +1494,13 @@ function onPointerUp(e) {
   }
   drag = null;
 }
-// 🔴 並べ替え中だけ画面の上下の動きを止める（止めないと指と一緒に一覧が流れる）
-function onTouchMove(e) { if (drag && drag.active) e.preventDefault(); }
+// 🔴 並べ替え中だけ画面の上下の動きを止める（止めないと指と一緒に一覧が流れる）＋指の動きをここからも受ける
+function onTouchMove(e) {
+  if (!drag) return;
+  if (drag.active) { e.preventDefault(); drag.dbg.tm += 1; }
+  var t = e.touches && e.touches[0];
+  if (t) dragMove(t.clientX, t.clientY);
+}
 
 // ── 選んで送る ─────────────────────────────────
 function renderSelCount() {
@@ -2345,6 +2377,8 @@ function start() {
   document.addEventListener("pointerup", onPointerUp);
   document.addEventListener("pointercancel", onPointerUp);
   document.addEventListener("touchmove", onTouchMove, { passive: false });
+  document.addEventListener("touchend", onTouchEnd);
+  document.addEventListener("touchcancel", onTouchEnd);
   el("groups").addEventListener("contextmenu", function (e) { e.preventDefault(); });
   el("catList").addEventListener("pointerdown", onPointerDown);        // 種類タブの行も長押しでメニュー（並べ替えはしない）
   el("catList").addEventListener("contextmenu", function (e) { e.preventDefault(); });
