@@ -566,6 +566,13 @@ function completeTask(task, now) {
     subs: task.subs.map(function (s) { return { t: s.t, done: false }; }), order: task.order
   }, now);
 }
+/** 小項目を見せる順＝未チェック（入れた順）→ チェック済み（入れた順）。i は元の番号（チェック・✕ はこれで当てる）。
+ *  保存の順は変えない＝外すと元の位置に戻る（2026-10-15） */
+function subsOrder(subs) {
+  var open = [], done = [];
+  (subs || []).forEach(function (s, i) { (s.done ? done : open).push({ s: s, i: i }); });
+  return open.concat(done);
+}
 
 // ── 一覧の組み分け ─────────────────────────────────
 function byOrder(a, b) {
@@ -1191,7 +1198,8 @@ function rowHtml(t, o) {
 /** 一覧で開いた小項目（チェックと「＋ 足す」だけ。消すのは詳細画面＝丸と ✕ の押し間違いを防ぐ） */
 function subsHtml(t, allDone) {
   var h = ['<div class="subx">'];
-  t.subs.forEach(function (s, i) {
+  subsOrder(t.subs).forEach(function (o) {
+    var s = o.s, i = o.i;
     h.push('<div class="sxr' + (s.done ? " done" : "") + '" data-act="subChk" data-i="' + i + '"><span class="chk' + (s.done ? " done" : "")
       + '"></span><span class="sxt">' + esc(s.t) + "</span></div>");
   });
@@ -1646,7 +1654,8 @@ function renderSheet() {
   if (r.kind && !t.due) h.push('<div class="smsg ng">繰り返しには期限が要ります（期限なしのままだと、完了したとき今日から数えます）。</div>');
   // 小項目
   h.push('<div class="sh">小項目</div><div class="sbox">');
-  t.subs.forEach(function (s, i) {
+  subsOrder(t.subs).forEach(function (o) {
+    var s = o.s, i = o.i;
     h.push('<div class="subrow"><button class="chk' + (s.done ? " done" : "") + '" data-sh="subChk" data-i="' + i + '"></button><span>'
       + esc(s.t) + '</span><button class="x" data-sh="subDel" data-i="' + i + '">✕</button></div>');
   });
