@@ -148,6 +148,12 @@ body.hasfab #toast{left:max(12px,calc(50vw - 260px + 12px));right:max(68px,calc(
 .sxr.add{color:var(--muted);font-size:14px}
 .sxhint{font-size:12px;color:var(--acc);padding:2px 0 4px}
 .sxadd{padding:4px 0 6px}
+.sxbulk{display:flex;gap:8px;flex-wrap:wrap;padding:2px 0 8px}
+.bulkb{border:1px solid var(--line);border-radius:16px;padding:0 12px;min-height:32px;background:var(--bg2);color:var(--ink2);font-size:13px;cursor:pointer}   /* 小項目をまとめて済／未（2026-10-15） */
+.sh.bulk{display:flex;align-items:center;gap:6px}
+.sh.bulk span{flex:1}
+.sh.bulk .bulkb{background:var(--card);color:var(--acc);font-weight:normal}
+.sh.bulk .bulkb.undo{background:#2C2C2A;color:#9BE3B7;border-color:#2C2C2A;font-weight:bold}
 .empty{padding:26px 16px;text-align:center;color:var(--muted);font-size:14px;line-height:1.7}
 
 /* F 選んで送る */
@@ -573,6 +579,24 @@ function subsOrder(subs) {
   (subs || []).forEach(function (s, i) { (s.done ? done : open).push({ s: s, i: i }); });
   return open.concat(done);
 }
+/** 小項目をまとめて済／未にする。{ n 変えた数, before 変える前の [{t, done}] }（↩ 元に戻す用・2026-10-15） */
+function setAllSubs(task, done) {
+  var before = task.subs.map(function (s) { return { t: s.t, done: s.done }; }), n = 0;
+  task.subs.forEach(function (s) { if (s.done !== done) { s.done = done; n += 1; } });
+  return { n: n, before: before };
+}
+/** setAllSubs の前に戻す。番号と文字が同じ項目だけ＝5秒の間に足した・消した項目を巻き込まない */
+function restoreSubs(task, before) {
+  (before || []).forEach(function (b, i) { var s = task.subs[i]; if (s && s.t === b.t) s.done = b.done; });
+}
+/** まとめてボタンのうち出すもの。2つ以上のときだけ・効かないほうは出さない（"all" すべて済に／"none" すべて未に） */
+function subsBulkKinds(subs) {
+  if (!subs || subs.length < 2) return [];
+  var dn = subs.filter(function (s) { return s.done; }).length, k = [];
+  if (dn < subs.length) k.push("all");
+  if (dn > 0) k.push("none");
+  return k;
+}
 
 // ── 一覧の組み分け ─────────────────────────────────
 function byOrder(a, b) {
@@ -905,7 +929,7 @@ var S = { tasks: [], cats: [], prefs: {} };
 var V = { tab: "list", day: "", cat: "", selecting: false, selected: {}, impOpen: true,
           undatedOpen: false, doneOpen: false, calY: 0, calM: 0, editCat: null, sheetId: null,
           sending: false, pinMode: false, catView: "", catMode: "open",
-          subsOpen: {}, subAddFor: null, subDrafts: {},
+          subsOpen: {}, subAddFor: null, subDrafts: {}, sheetSubsUndo: null,
           adding: false, addWhere: "list", add: null, addDraft: "", menuId: null };   // ＋の入力シート（add＝札の値・addDraft＝打ちかけ）／長押しのメニューのタスク   // subDrafts＝打ちかけの小項目（描き直しで消えないように）   // 一覧で小項目を開いているタスク／「＋ 足す」の欄を出しているタスク
 
 function el(id) { return document.getElementById(id); }
@@ -1208,9 +1232,19 @@ function subsHtml(t, allDone) {
     h.push('<div class="sxadd"><input class="sin" data-subnew="' + esc(t.id) + '" value="' + esc(V.subDrafts[t.id] || "")
       + '" placeholder="打って Enter で足す" enterkeyhint="done"></div>');
   } else h.push('<div class="sxr add" data-act="subAdd">＋ 足す</div>');
+  var bulk = bulkHtml(t, "data-act");
+  if (bulk) h.push('<div class="sxbulk">' + bulk + "</div>");
   h.push("</div>");
   return h.join("");
 }
+/** 「✓ すべて済に」「○ すべて未に」の札（一覧＝data-act／詳細＝data-sh で同じ物を出す） */
+function bulkHtml(t, attr) {
+  return subsBulkKinds(t.subs).map(function (k) {
+    return '<button class="bulkb" ' + attr + '="' + (k === "all" ? "subsAll" : "subsNone") + '">' + (k === "all" ? "✓ すべて済に" : "○ すべて未に") + "</button>";
+  }).join("");
+}
+/** まとめて済／未にした一言（一覧の帯・詳細の見出しで同じ言い方） */
+function bulkMsg(n, done, short) { return (short ? "" : "小項目を") + n + "つ" + (done ? "済" : "未") + "にしました"; }   // short＝詳細画面の「小項目」見出しの横（二重にしない）
 
 // ── 入れる ───────────────────────────────────
 /** where＝"cat" なら種類タブの入力欄（今の種類が付く・期限なし）。それ以外は一覧（見ている日・絞っている種類） */
@@ -1380,6 +1414,12 @@ function onListClick(e) {
       if (!s) return;
       s.done = !s.done;
       touch(t); saveAll(); render();
+      return;
+    }
+    if (a === "subsAll" || a === "subsNone") {
+      var done = a === "subsAll", r = setAllSubs(t, done);
+      touch(t); saveAll(); render();
+      showUndo(bulkMsg(r.n, done), { kind: "subs", id: t.id, before: r.before });
       return;
     }
     if (a === "subAdd") { V.subAddFor = t.id; render(); focusSubNew(t.id); return; }
@@ -1611,8 +1651,14 @@ function failSend(why, done) {
 }
 
 // ── G 詳細 ───────────────────────────────────
-function openSheet(id) { V.sheetId = id; renderSheet(); show("sheet", true); show("sheetBack", true); }
+function openSheet(id) { dropSheetSubsUndo(); V.sheetId = id; renderSheet(); show("sheet", true); show("sheetBack", true); }
+/** 詳細画面の小項目の「↩ 元に戻す」を捨てる（閉じた・別のタスクを開いた・もう一度押した） */
+function dropSheetSubsUndo() {
+  if (V.sheetSubsUndo) clearTimeout(V.sheetSubsUndo.timer);
+  V.sheetSubsUndo = null;
+}
 function closeSheet() {
+  dropSheetSubsUndo();
   var t = taskById(V.sheetId);
   if (t && !String(t.title).trim()) t.title = UNTITLED;
   V.sheetId = null;
@@ -1653,7 +1699,10 @@ function renderSheet() {
   h.push("</div>");
   if (r.kind && !t.due) h.push('<div class="smsg ng">繰り返しには期限が要ります（期限なしのままだと、完了したとき今日から数えます）。</div>');
   // 小項目
-  h.push('<div class="sh">小項目</div><div class="sbox">');
+  // 小項目の見出し＝まとめて済／未の札。押した後5秒は「↩ 元に戻す」（一覧の帯は詳細画面の下に隠れるため・2026-10-15）
+  var su = V.sheetSubsUndo && V.sheetSubsUndo.id === t.id ? V.sheetSubsUndo : null;
+  h.push('<div class="sh bulk"><span>小項目' + (su ? "　" + esc(su.msg) : "") + "</span>"
+    + (su ? '<button class="bulkb undo" data-sh="subsUndo">↩ 元に戻す</button>' : bulkHtml(t, "data-sh")) + '</div><div class="sbox">');
   subsOrder(t.subs).forEach(function (o) {
     var s = o.s, i = o.i;
     h.push('<div class="subrow"><button class="chk' + (s.done ? " done" : "") + '" data-sh="subChk" data-i="' + i + '"></button><span>'
@@ -1714,6 +1763,18 @@ function onSheetClick(e) {
   else if (k === "autoImp") { setAutoImp(t, !t.autoImp); }   // ⭐は閉じたとき（render の頭）に付く＝開いている間は勝手に変わらない
   else if (k === "noDue") { t.due = ""; t.order = nextOrder(""); }
   else if (k === "subChk") { var s = t.subs[+b.getAttribute("data-i")]; s.done = !s.done; }
+  else if (k === "subsAll" || k === "subsNone") {
+    var done = k === "subsAll", r = setAllSubs(t, done);
+    dropSheetSubsUndo();
+    V.sheetSubsUndo = { id: t.id, before: r.before, msg: bulkMsg(r.n, done, true),
+      timer: setTimeout(function () { V.sheetSubsUndo = null; if (V.sheetId === t.id) renderSheet(); }, 5000) };
+  }
+  else if (k === "subsUndo") {
+    var su = V.sheetSubsUndo;
+    dropSheetSubsUndo();
+    if (!su || su.id !== t.id) { renderSheet(); return; }
+    restoreSubs(t, su.before);
+  }
   else if (k === "subDel") {
     t.subs.splice(+b.getAttribute("data-i"), 1);
     if (!t.subs.length) { delete V.subsOpen[t.id]; delete V.subDrafts[t.id]; if (V.subAddFor === t.id) V.subAddFor = null; saveSubsOpen(); }
@@ -2481,6 +2542,9 @@ function start() {
     if (st.kind === "del") {
       // 元の位置へ戻す（まだ無いものだけ＝2回戻さない）
       st.items.forEach(function (it) { if (!taskById(it.task.id)) S.tasks.splice(Math.min(it.index, S.tasks.length), 0, it.task); });
+    } else if (st.kind === "subs") {
+      var t = taskById(st.id);   // 5秒の間に消したタスクは戻さない
+      if (t) { restoreSubs(t, st.before); touch(t); }
     } else {
       var set = {}; st.ids.forEach(function (i) { set[i] = true; });
       S.tasks = uncompleteMany(S.tasks, set, nowIso()).tasks;
