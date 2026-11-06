@@ -444,11 +444,21 @@ function parseWhen(word, base) {
 }
 
 // ── 1行の読み方（task_desk/core/inbox.py の parse_line の写し）──
+// 日付の後ろに付いた句読点（`牛乳@明日。`）。読めなかったときだけ外して読み直す（inbox.py の _TRAIL_PUNCT・2026-10-31）
+var TRAIL_PUNCT = "。、，．.,!?！？」』)）";
+/** `@` の後ろを日付として読む（inbox.py の _when の写し）。読めなければ ""。 */
+function whenWord(value, base) {
+  var got = parseWhen(value, base);
+  if (got) return got;
+  var core = value;
+  while (core && TRAIL_PUNCT.indexOf(core.charAt(core.length - 1)) >= 0) core = core.slice(0, -1);
+  return core && core !== value ? parseWhen(core, base) : "";
+}
 var PRIORITY_WORDS = { "高": 1, "たかい": 1, "high": 1, "!": 1,
                        "低": -1, "ひくい": -1, "low": -1, "通常": 0, "normal": 0 };
 /** 入力欄の1行 → { title, due, catName, imp, warnings }。
  *  due は @ が無ければ null（呼び出し側が「今見ている日」か「期限なし」を決める）。
- *  #名前 が種類に無ければ未分類＋一言（勝手に種類を増やさない）。 */
+ *  #名前 が種類に無ければ未分類＋一言・題名に残す（勝手に種類を増やさない）。 */
 function parseInput(text, catNames, base) {
   text = String(text || "").replace(/\s+/g, " ");
   var warnings = [], due = null, catName = null, pri = 0, rest = text, m;
@@ -456,17 +466,16 @@ function parseInput(text, catNames, base) {
   while ((m = re.exec(text)) !== null) {
     var mark = m[1], value = m[2];
     if (mark === "@") {
-      var got = parseWhen(value, base);
+      var got = whenWord(value, base);
       if (got) { due = got; rest = rest.replace("@" + value, ""); }
       else warnings.push("「@" + value + "」は日付として読めませんでした（題名に残しています）");
     } else if (mark === "#") {
-      if (catNames.indexOf(value) >= 0) catName = value;
-      else warnings.push("種類「" + value + "」はありません（未分類にしました）");
-      rest = rest.replace("#" + value, "");
+      // 🔴 読めなかった印は題名に残す（Task Desk 2026-10-31＝`#1 位の件` が「位の件」になっていた）
+      if (catNames.indexOf(value) >= 0) { catName = value; rest = rest.replace("#" + value, ""); }
+      else warnings.push("種類「" + value + "」はありません（未分類にして、題名に残しています）");
     } else {
-      if (PRIORITY_WORDS.hasOwnProperty(value)) pri = PRIORITY_WORDS[value];
-      else warnings.push("「!" + value + "」は読めませんでした（重要にしていません）");
-      rest = rest.replace("!" + value, "");
+      if (PRIORITY_WORDS.hasOwnProperty(value)) { pri = PRIORITY_WORDS[value]; rest = rest.replace("!" + value, ""); }
+      else warnings.push("「!" + value + "」は読めませんでした（重要にせず、題名に残しています）");
     }
     re.lastIndex = m.index + m[0].length;
   }
@@ -475,7 +484,7 @@ function parseInput(text, catNames, base) {
   while ((m = glued.exec(text)) !== null) {
     var gm = m[2], gv = m[3];
     if (gm === "@" && due === null) {
-      var g = parseWhen(gv, base);
+      var g = whenWord(gv, base);          // `@明日。` の句読点付きも読む（2026-10-31）
       if (g) { due = g; rest = rest.replace("@" + gv, ""); }
     } else if (gm === "#" && catName === null && catNames.indexOf(gv) >= 0) {
       catName = gv; rest = rest.replace("#" + gv, "");
